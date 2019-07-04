@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\megan\libplctag\src\examples\utils_windows.c">
+      <Filter>Other</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="snap7\s7.cpp">
+      <Filter>snap7</Filter>
+    </ClCompile>
+    <ClCompile Include="snap7\snap7.cpp">
+      <Filter>snap7</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\sol_threads.h">
+      <Filter>Other</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\unix_threads.h">
+      <Filter>Other</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\megan\libplctag\src\examples\utils.h">
+      <Filter>Other</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\win_threads.h">
+      <Filter>Other</Filter>
+    </ClInclude>
+    <ClInclude Include="snap7\snap7.h">
+      <Filter>snap7</Filter>
+    </ClInclude>
+    <ClInclude Include="snap7\snap_platform.h">
+      <Filter>snap7</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{5a54330f-94c8-41aa-b738-2ec22fbf5e4d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="snap7">
+      <UniqueIdentifier>{fc3463f3-eaae-47e5-8735-6c8690df54a0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Other">
+      <UniqueIdentifier>{0717ace9-c4e4-457d-a742-fc6d41f351f6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\megan\libplctag\CMakeLists.txt">
+      <Filter>Other</Filter>
+    </CustomBuild>
+  </ItemGroup>
+</Project>
