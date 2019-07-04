@@ -177,7 +177,7 @@ bool Check(int Result, const char * function)
 			printf("| Library Error (-1)\n");
 		else
 			cout << "Error number: " << Result << "\n";
-		//		printf("| %s\n", ErrCliText(Result).c_str());						//FIGURE OUT WHAT THIS DOES!!!!!!!!!! or rather is supposed to do
+				printf("| %s\n", ErrCliText(Result).c_str());						//FIGURE OUT WHAT THIS DOES!!!!!!!!!! or rather is supposed to do
 		printf("+-----------------------------------------------------\n");
 		ko++;
 	}
@@ -246,6 +246,7 @@ void UnitStatus()
 bool CliConnect()
 {
 	int res = Cli_ConnectTo(Client, Address, Rack, Slot);
+	cout << "tried making connection";
 	if (Check(res, "UNIT Connection")) {
 		//printf("  Connected to   : %s (Rack=%d, Slot=%d)\n", Address, Rack, Slot);
 		//printf("  PDU Requested  : %d bytes\n", Client->PDURequest);
@@ -585,6 +586,7 @@ int main()
 		cout << "Siemens 300" << "\n";
 		int Int;
 		//Client->SetAsCallback(CliCompletion, NULL);
+		cout << "past here";
 		if (CliConnect())
 		{
 			//readArea();
