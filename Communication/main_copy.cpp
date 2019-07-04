@@ -9,13 +9,10 @@
 #include "utils.h"
 #include <iostream>
 #include <string>
-//#include "s7_client.h"
-//#include "s7_text.h"
 #include <fstream>
 #include "rapidxml.hpp"
 #include <vector>
 #include <algorithm>
-//#include "snap7.h"
 #include <s7.h>
 using namespace rapidxml;
 using namespace std;
@@ -59,11 +56,6 @@ int ko = 0; // Number of test failure
 
 bool JobDone = false;
 int JobResult = 0;
-//struct ComponentResult {
-//	string SerialNumber;
-//	int TestInt;
-//	double TestReal;
-//};
 
 void S7API CliCompletion(void *usrPtr, int opCode, int opResult)
 {
@@ -74,51 +66,7 @@ void S7API CliCompletion(void *usrPtr, int opCode, int opResult)
 #ifndef HEXDUMP_COLS
 #define HEXDUMP_COLS 16
 #endif
-void hexdump(void *mem, unsigned int len)
-{
-	unsigned int i, j;
 
-	for (i = 0; i < len + ((len % HEXDUMP_COLS) ? (HEXDUMP_COLS - len % HEXDUMP_COLS) : 0); i++)
-	{
-		/* print offset */
-		if (i % HEXDUMP_COLS == 0)
-		{
-			printf("0x%04x: ", i);
-		}
-
-		/* print hex data */
-		if (i < len)
-		{
-
-			printf("%02x ", 0xFF & ((char*)mem)[i], "\n");
-		}
-		else /* end of block, just aligning for ASCII dump */
-		{
-			printf("   ");
-		}
-
-		/* print ASCII dump */
-		//if (i % HEXDUMP_COLS == (HEXDUMP_COLS - 1))
-		//{
-		//	for (j = i - (HEXDUMP_COLS - 1); j <= i; j++)
-		//	{
-		//		if (j >= len) /* end of block, not really printing */
-		//		{
-		//			putchar(' ');
-		//		}
-		//		else if (isprint((((char*)mem)[j] & 0x7F))) /* printable char */
-		//		{
-		//			putchar(0xFF & ((char*)mem)[j]);
-		//		}
-		//		else /* other char */
-		//		{
-		//			putchar('.');
-		//		}
-		//	}
-		//	putchar('\n');
-		//}
-	}
-}
 int hexToInt(void *db, int len)
 {
 	unsigned int i, j;
@@ -137,7 +85,6 @@ int hexToInt(void *db, int len)
 		{
 			int ones = ((0xFF & ((char*)db)[len - 1 - i]) % (0x10));
 			returnVal += base * ones;
-			//cout << "ones: " << ones << "\n";
 			base *= 16;
 			int tens = (0xFF & (((char*)db)[len - 1 - i] >> 4)) % (0x10);
 
@@ -153,7 +100,6 @@ bool intToBool(int num, int pos) {
 	int toBool = num;
 	for (int i = 0; i < 8; i++) {
 		temp[i] = toBool % 2;
-		//cout << temp[i] << "\n";
 		toBool /= 2;
 	}
 	return temp[pos];
@@ -177,20 +123,11 @@ bool Check(int Result, const char * function)
 			printf("| Library Error (-1)\n");
 		else
 			cout << "Error number: " << Result << "\n";
-				printf("| %s\n", ErrCliText(Result).c_str());						//FIGURE OUT WHAT THIS DOES!!!!!!!!!! or rather is supposed to do
+		//		printf("| %s\n", Cli_ErrorText(Result).c_str());						//this function doesn't work, so just Google the error code 
 		printf("+-----------------------------------------------------\n");
 		ko++;
 	}
 	return Result == 0;
-}
-void ReadDB()
-{
-	byte db[2];
-	int res = Cli_DBRead(Client, 1, 2, 2, &db);
-	if (Check(res, "ReadDB")) {
-		cout << &db << "\n";
-		cout << hexToInt(&db, 1);
-	}
 }
 
 int getIntAt(int db, int start) {
@@ -198,92 +135,85 @@ int getIntAt(int db, int start) {
 	int out;
 	int res = Cli_DBRead(Client, db, start, 2, &data);
 	if (Check(res, "getIntAt")) {
-		out = hexToInt(&data, 2);
+
+		uint16_t integer = S7_GetUIntAt(data, 0);
+		out = integer;
 	}
 	return out;
 }
-int getRealAt(int db, int start) {
+float getRealAt(int db, int start) {
 	byte data[4];
-	int out = 0;
+	float out = 0;
 	int res = Cli_DBRead(Client, db, start, 4, &data);
 	if (Check(res, "getRealAt")) {
-		cout << "data: " << data << "\n";
-		hexdump(&data, 4);
-		//		out = hexToInt(&data, 4);
+		out = S7_GetRealAt(data, 0);
 	}
 	return out;
 }
-//bool getBoolAt(int db, int startByte, int startBit) {
-//	byte data;
-//	int temp;
-//	bool out = 0;
-//	
-//	int res = Client->DBRead(db, startByte, 1, &data);
-//	if (Check(res, "getBoolAt")) {
-//		temp = hexToInt(&data,1);
-//		out = intToBool(temp, startBit);
-//	}
-//	return out;
-//}
+bool getBoolAt(int db, int startByte, int startBit) {
+	byte data[1];
+	int temp;
+	bool out = 0;
+	int res = Cli_DBRead(Client,db, startByte, 1, &data);
+	if (Check(res, "getBoolAt")) {
+		out = S7_GetBitAt(data, 0, startBit);
+	}
+	return out;
+}
+string getStringAt(int db, int start) {
+	string out;
+	byte data[256];
+	int res = Cli_DBRead(Client, db, start, 256, &data);
+	if (Check(res, "getRealAt")) {
+		out = S7_GetStringAt(data, 0);
+	}
+	return out;
+}
+void writeIntAt(int db, int start, int value) {
+	byte data[2];
+	S7_SetUIntAt(data, 0, value);
+	int res = Cli_DBWrite(Client, db, start, 2, data);
+	if (Check(res, "writeIntAt")) {
+		cout << "integer value reassigned\n";
+	}
+}
+void writeRealAt(int db, int start, float value) {
+	byte data[4];
+	S7_SetRealAt(data, 0, value);
+	int res = Cli_DBWrite(Client, db, start, 2, data);
+	if (Check(res, "writeRealAt")) {
+		cout << "float value reassigned\n";
+	}
+}
+void writeStringAt(int db, int start, string value) {
+	byte data[256];
+	S7_SetStringAt(data, 0, 256,value);
+	int res = Cli_DBWrite(Client, db, start, 256, data);
+	if (Check(res, "writeStringAt")) {
+		cout << "string value reassigned\n";
+	}
+}
+void writeBoolAt(int db, int startbyte, int startbit, bool value) {
+	byte data[1];
+	S7_SetBitAt(data, startbyte, startbit, value);
+	int res = Cli_DBWrite(Client, db, startbyte, 1, data);
+	if (Check(res, "writeBoolAt")) {
+		cout << "boolean reassigned\n";
+	}
 
-// PLC Status
-void UnitStatus()
-{
-	//int res = 0;
-	//int Status;
-	//res = Client->PlcStatus();
-	//if (Check(res, "CPU Status"))
-	//{
-	//	switch (Status)
-	//	{
-	//	case S7CpuStatusRun: printf("  RUN\n"); break;
-	//	case S7CpuStatusStop: printf("  STOP\n"); break;
-	//	default: printf("  UNKNOWN\n"); break;
-	//	}
-	//};
 }
 // Unit Connection
 bool CliConnect()
 {
 	int res = Cli_ConnectTo(Client, Address, Rack, Slot);
-	cout << "tried making connection";
 	if (Check(res, "UNIT Connection")) {
-		//printf("  Connected to   : %s (Rack=%d, Slot=%d)\n", Address, Rack, Slot);
+		printf("  Connected to   : %s (Rack=%d, Slot=%d)\n", Address, Rack, Slot);
 		//printf("  PDU Requested  : %d bytes\n", Client->PDURequest);
 		//printf("  PDU Negotiated : %d bytes\n", Client->PDULength);
 	};
 	return res == 0;
 }
 
-// Perform readonly tests, no cpu status modification
-void PerformTests()
-{/*
- OrderCode();
- CpuInfo();
- CpInfo();
- UnitStatus();
- ReadSzl_0011_0000();
- UploadDB0();
- AsCBUploadDB0();
- AsEWUploadDB0();
- AsPOUploadDB0();
- ListBlocks();
- MultiRead();
- Up_DownloadFC1();*/
-}
-// Tests Summary
-void Summary()
-{
-	printf("\n");
-	printf("+-----------------------------------------------------\n");
-	printf("| Test Summary \n");
-	printf("+-----------------------------------------------------\n");
-	printf("| Performed : %d\n", (ok + ko));
-	printf("| Passed    : %d\n", ok);
-	printf("| Failed    : %d\n", ko);
-	printf("+----------------------------------------[press a key]\n");
-	getchar();
-}
 /*end set up for SIEMENS SERVER*/
 
 //-.-.-.-.-.-.-.--.-.-.-.--.-.--.-.-.-.-..-.-..-.-.-.-.-.-..-.--.-.-.-.-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-
@@ -482,6 +412,7 @@ int main()
 		state = 1;
 	}
 	if (Make == "SIEMENS") {
+		Client = Cli_Create();
 		if (Model == "300") {
 			state = 2;
 		}
@@ -584,32 +515,38 @@ int main()
 		Rack = 0;
 		Slot = 2;
 		cout << "Siemens 300" << "\n";
-		int Int;
-		//Client->SetAsCallback(CliCompletion, NULL);
-		cout << "past here";
 		if (CliConnect())
 		{
-			//readArea();
-			//Int = getIntAt(1, 2);
-			//cout << "int: " << Int << "\n";
-			//	cout << "int2: " << getIntAt(1, 4) << "\n";
+			int x;
+			float f;
+			string str;
+			cout << "int: " << getIntAt(1, 2) << "\n";
+			cout << "int2: " << getIntAt(1, 4) << "\n";
 			//cout << "int3: " << getIntAt(1, 6) << "\n";
-			//getRealAt(1,8);
-			//getStringAt();
-			//getBoolAt(1,0,1);
+			cout << "float: " << getRealAt(1,8) << "\n";
+			cout << "string: " << getStringAt(1,12) << "\n";
+			cout << "boolean: " << getBoolAt(1,0,1) << "\n";
+			cout << "input new integer:\n";
+			cin >> x;
+			writeIntAt(1, 4, x);
+			cout << "input new float value:\n";
+			cin >> f;
+			writeRealAt(1, 8, f);
+			cout << "input new string value:\n";
+			cin >> str;
+			writeStringAt(1, 12, str);
+			writeBoolAt(1, 0, 1, 1);
+			cout << "int2: " << getIntAt(1, 4) << "\n";
+			cout << "float: " << getRealAt(1, 8) << "\n";
+			cout << "string: " << getStringAt(1, 12) << "\n";
+			cout << "boolean: " << getBoolAt(1, 0, 1) << "\n";
+
+
+			getchar();
 			Cli_Disconnect(Client);
 
 		}
 
-		/*
-		int res = Client->ConnectTo("10.0.0.9", 0, 2);
-		if (res == 0) {
-		printf("connected");
-		getchar();
-		}
-		cout << res << "\n";
-		*/
-		//Summary();
 		getchar();
 		return 0;
 	}
@@ -622,24 +559,8 @@ int main()
 				  //Client->SetAsCallback(CliCompletion, NULL);
 		if (CliConnect())
 		{
-			//getIntAt(1,2);
-			//getFloatAt();
-			//getStringAt();
-			//getBoolAt(1,0,1);
-			/*
-			OrderCode();
-			CpuInfo();
-			CpInfo();
-			UnitStatus();
-			ReadSzl_0011_0000();
-			UploadDB0();
-			AsCBUploadDB0();
-			AsEWUploadDB0();
-			AsPOUploadDB0();
-			MultiRead();*/
 			Cli_Disconnect(Client);
 		}
-		Summary();
 		getchar();
 		return 0;
 	}
