@@ -6,16 +6,16 @@
 #include <WinSock2.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../lib/libplctag.h"
+#include "libplctag/libplctag.h"
 #include "utils.h"
 #include <iostream>
 #include <string>
 #include <fstream>
-#include "rapidxml.hpp"
+#include "rapidxml/rapidxml.hpp"
 #include <vector>
 #include <algorithm>
-#include <s7.h>
-#include "libpq-fe.h"
+#include "snap7/s7.h"
+#include "postgresql/libpq-fe.h"
 using namespace rapidxml;
 using namespace std;
 

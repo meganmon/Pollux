@@ -33,6 +33,12 @@
     <ClInclude Include="snap7\snap_platform.h">
       <Filter>snap7</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\libplctag\src\lib\libplctag.h">
+      <Filter>libplctag</Filter>
+    </ClInclude>
+    <ClInclude Include="snap7\s7.h">
+      <Filter>snap7</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source">
@@ -43,6 +49,9 @@
     </Filter>
     <Filter Include="Other">
       <UniqueIdentifier>{0717ace9-c4e4-457d-a742-fc6d41f351f6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libplctag">
+      <UniqueIdentifier>{6b55c7d1-31a7-45a3-ad5e-8e76b8db1150}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
