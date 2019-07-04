@@ -2,6 +2,7 @@
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 #endif
+//if includes are rearranged, solution will not compile
 #include <WinSock2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +15,7 @@
 #include <vector>
 #include <algorithm>
 #include <s7.h>
+#include "libpq-fe.h"
 using namespace rapidxml;
 using namespace std;
 
@@ -30,7 +32,6 @@ int state;
 
 /*set up for Postgressql*/
 //the libraries and set up for the Postgresql
-#include "libpq-fe.h"
 PGconn *dbconn;
 PGconn *newconn;
 PGresult *query;
@@ -42,10 +43,6 @@ const char *conninfo = "host=localhost port=5432 user=postgres password=Pollux12
 
 /*set up for SIEMENS SERVER*/
 S7Object Client;
-//TSnap7Client *Client;
-
-byte Buffer[65536]; // 64 K buffer
-int SampleDBNum = 1000;
 
 const char *Address;     // PLC IP Address
 						 //const char * Address;
@@ -54,56 +51,7 @@ int Rack, Slot; // Default Rack and Slot
 int ok = 0; // Number of test pass
 int ko = 0; // Number of test failure
 
-bool JobDone = false;
-int JobResult = 0;
 
-void S7API CliCompletion(void *usrPtr, int opCode, int opResult)
-{
-	JobResult = opResult;
-	JobDone = true;
-}
-
-#ifndef HEXDUMP_COLS
-#define HEXDUMP_COLS 16
-#endif
-
-int hexToInt(void *db, int len)
-{
-	unsigned int i, j;
-	int returnVal = 0;
-	int base = 1;
-	for (i = 0; i < len + ((len % HEXDUMP_COLS) ? (HEXDUMP_COLS - len % HEXDUMP_COLS) : 0); i++)
-	{
-		/* print offset */
-		if (i % HEXDUMP_COLS == 0)
-		{
-			//printf("0x%04x: ", i);
-		}
-
-		/* print hex data */
-		if (i < len)
-		{
-			int ones = ((0xFF & ((char*)db)[len - 1 - i]) % (0x10));
-			returnVal += base * ones;
-			base *= 16;
-			int tens = (0xFF & (((char*)db)[len - 1 - i] >> 4)) % (0x10);
-
-			//cout << "tens: " << tens << "\n";
-			returnVal += base * tens;
-			base *= 16;
-		}
-	}
-	return returnVal;
-}
-bool intToBool(int num, int pos) {
-	bool temp[8];
-	int toBool = num;
-	for (int i = 0; i < 8; i++) {
-		temp[i] = toBool % 2;
-		toBool /= 2;
-	}
-	return temp[pos];
-}
 // Check error
 bool Check(int Result, const char * function)
 {
@@ -129,13 +77,12 @@ bool Check(int Result, const char * function)
 	}
 	return Result == 0;
 }
-
+// get***At returns asked for data type given what datablock data is in and which byte to read from(in the case of boolean, also need to know what bit variable is at)
 int getIntAt(int db, int start) {
 	byte data[2];
 	int out;
 	int res = Cli_DBRead(Client, db, start, 2, &data);
 	if (Check(res, "getIntAt")) {
-
 		uint16_t integer = S7_GetUIntAt(data, 0);
 		out = integer;
 	}
@@ -146,7 +93,7 @@ float getRealAt(int db, int start) {
 	float out = 0;
 	int res = Cli_DBRead(Client, db, start, 4, &data);
 	if (Check(res, "getRealAt")) {
-		out = S7_GetRealAt(data, 0);
+		out = S7_GetRealAt(data, 0); // gives closest real to given number, not fully accurate
 	}
 	return out;
 }
@@ -154,7 +101,7 @@ bool getBoolAt(int db, int startByte, int startBit) {
 	byte data[1];
 	int temp;
 	bool out = 0;
-	int res = Cli_DBRead(Client,db, startByte, 1, &data);
+	int res = Cli_DBRead(Client, db, startByte, 1, &data);
 	if (Check(res, "getBoolAt")) {
 		out = S7_GetBitAt(data, 0, startBit);
 	}
@@ -169,8 +116,9 @@ string getStringAt(int db, int start) {
 	}
 	return out;
 }
+//similar to get***At but also need to input value
 void writeIntAt(int db, int start, int value) {
-	byte data[2];
+	byte data[2]; // for 16 bit integer
 	S7_SetUIntAt(data, 0, value);
 	int res = Cli_DBWrite(Client, db, start, 2, data);
 	if (Check(res, "writeIntAt")) {
@@ -187,7 +135,7 @@ void writeRealAt(int db, int start, float value) {
 }
 void writeStringAt(int db, int start, string value) {
 	byte data[256];
-	S7_SetStringAt(data, 0, 256,value);
+	S7_SetStringAt(data, 0, 256, value);
 	int res = Cli_DBWrite(Client, db, start, 256, data);
 	if (Check(res, "writeStringAt")) {
 		cout << "string value reassigned\n";
@@ -260,7 +208,7 @@ int32_t create_tagR(const char *path)
 	}
 	return tag;
 }
-/*FOR READING TAGS: currently elem count is set to 1 element, but if capability to read an array for each tag has been kept*/
+/*FOR READING TAGS: currently elem count is set to 1 element, but capability to read an array for each tag has been kept, except for in updateStringR*/
 int read_intR(int32_t tag) {
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
 	if (rc != PLCTAG_STATUS_OK) {
@@ -385,7 +333,7 @@ int main()
 	/*READ THE XML Doc*/
 	xml_document<> doc;
 	xml_node<> * root_node;
-	ifstream myfile("TEST_XML.xml");
+	ifstream myfile("TEST_XML.xml"); // open whatever file the data is in (should be reading from Communication folder)
 	if (myfile.fail()) {
 		printf("cannot find file");
 		getchar();
@@ -399,21 +347,22 @@ int main()
 	root_node = doc.first_node("ROOT");
 	xml_node<> * plcs_node = root_node->first_node("PLCs");
 	xml_node<> * plc_node = plcs_node->first_node("PLC");
-	Make = plc_node->first_attribute("Type")->value();
+	Make = plc_node->first_attribute("Type")->value(); // assign the brand
 	cout << "Make: " << Make << "\n";
-	Model = plc_node->first_attribute("Model")->value();
+	Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
 	cout << "Model: " << Model << "\n";
-	IP_address = plc_node->first_attribute("IPAddress")->value();
+	IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
 	cout << "IP Address: " << IP_address << "\n";
 
-	transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
+	//make the make readable regardless of upper or lower case
+	transform(Make.begin(), Make.end(), Make.begin(), ::toupper); 
 	if (Make == "ROCKWELL") {
 		cout << "Model recognized as Rockwell\n";
 		state = 1;
 	}
 	if (Make == "SIEMENS") {
-		Client = Cli_Create();
-		if (Model == "300") {
+		Client = Cli_Create(); // initialize the client connection
+		if (Model == "300") { // fill out for the different models that use this set up rather than the other one
 			state = 2;
 		}
 		else {
@@ -509,9 +458,7 @@ int main()
 	}
 	case SIEMENS300:
 	{
-		//strcpy(Address, IP_address.c_str());
 		Address = IP_address.c_str();
-		getchar();
 		Rack = 0;
 		Slot = 2;
 		cout << "Siemens 300" << "\n";
@@ -520,12 +467,14 @@ int main()
 			int x;
 			float f;
 			string str;
+			//print out initial values
 			cout << "int: " << getIntAt(1, 2) << "\n";
 			cout << "int2: " << getIntAt(1, 4) << "\n";
 			//cout << "int3: " << getIntAt(1, 6) << "\n";
-			cout << "float: " << getRealAt(1,8) << "\n";
-			cout << "string: " << getStringAt(1,12) << "\n";
-			cout << "boolean: " << getBoolAt(1,0,1) << "\n";
+			cout << "float: " << getRealAt(1, 8) << "\n";
+			cout << "string: " << getStringAt(1, 12) << "\n";
+			cout << "boolean: " << getBoolAt(1, 0, 1) << "\n";
+			//reassign values
 			cout << "input new integer:\n";
 			cin >> x;
 			writeIntAt(1, 4, x);
@@ -536,27 +485,23 @@ int main()
 			cin >> str;
 			writeStringAt(1, 12, str);
 			writeBoolAt(1, 0, 1, 1);
+			//print out new values
 			cout << "int2: " << getIntAt(1, 4) << "\n";
 			cout << "float: " << getRealAt(1, 8) << "\n";
 			cout << "string: " << getStringAt(1, 12) << "\n";
 			cout << "boolean: " << getBoolAt(1, 0, 1) << "\n";
-
-
-			getchar();
 			Cli_Disconnect(Client);
 
 		}
-
+		cout << "press any key to EXIT";
 		getchar();
 		return 0;
 	}
 	case SIEMENS1500:
 	{
-		//Address = "10.0.0.9";
 		Address = IP_address.c_str();
 		Rack = 0;
 		Slot = 0; //could also be 1
-				  //Client->SetAsCallback(CliCompletion, NULL);
 		if (CliConnect())
 		{
 			Cli_Disconnect(Client);
@@ -566,6 +511,7 @@ int main()
 	}
 	case ERROR:
 	{
+		// no current use for this, but set up in case of running into additional errors
 		cout << "Error";
 		getchar();
 		break;
