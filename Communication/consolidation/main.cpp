@@ -55,14 +55,7 @@ int ko = 0; // Number of test failure
 // Check error
 bool Check(int Result, const char * function)
 {
-	//printf("\n");
-	//printf("+-----------------------------------------------------\n");
-	//printf("| %s\n", function);
-	//printf("+-----------------------------------------------------\n");
 	if (Result == 0) {
-		//printf("| Result         : OK\n");
-		//printf("| Execution time : %d ms\n", Client->Time());
-		//printf("+-----------------------------------------------------\n");
 		ok++;
 	}
 	else {
@@ -93,7 +86,7 @@ float getRealAt(int db, int start) {
 	float out = 0;
 	int res = Cli_DBRead(Client, db, start, 4, &data);
 	if (Check(res, "getRealAt")) {
-		out = S7_GetRealAt(data, 0); // gives closest real to given number, not fully accurate
+		out = S7_GetRealAt(data, 0); 
 	}
 	return out;
 }
@@ -143,10 +136,15 @@ void writeStringAt(int db, int start, string value) {
 }
 void writeBoolAt(int db, int startbyte, int startbit, bool value) {
 	byte data[1];
-	S7_SetBitAt(data, startbyte, startbit, value);
-	int res = Cli_DBWrite(Client, db, startbyte, 1, data);
+	cout << value << "\n";
+	getchar();
+	S7_SetBitAt(data, 0, startbit, value);
+	getchar();
+	int res = Cli_DBWrite(Client, db, startbyte, 1, &data);
+	getchar();
 	if (Check(res, "writeBoolAt")) {
 		cout << "boolean reassigned\n";
+		getchar();
 	}
 
 }
@@ -366,7 +364,7 @@ int main()
 			state = 2;
 		}
 		else {
-			state = 2;
+			state = 3;
 		}
 	}
 	switch (state) {
@@ -459,6 +457,7 @@ int main()
 	case SIEMENS300:
 	{
 		Address = IP_address.c_str();
+//		Address = "10.0.0.9";
 		Rack = 0;
 		Slot = 2;
 		cout << "Siemens 300" << "\n";
@@ -500,12 +499,41 @@ int main()
 	case SIEMENS1500:
 	{
 		Address = IP_address.c_str();
+		//Address = "10.0.0.12";
 		Rack = 0;
-		Slot = 0; //could also be 1
+		Slot = 1;
+		cout << "Siemens 1500" << "\n";
+		getchar();
 		if (CliConnect())
 		{
+			int x;
+			float f;
+			string str;
+			//print out initial values
+			cout << "int: " << getIntAt(1, 0) << "\n";
+			cout << "float: " << getRealAt(1, 260) << "\n";
+			cout << "string: " << getStringAt(1, 4) << "\n";
+			cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
+			//reassign values
+			cout << "input new integer:\n";
+			cin >> x;
+			writeIntAt(1, 0, x);
+			cout << "input new float value:\n";
+			cin >> f;
+			writeRealAt(1, 260, f);
+			cout << "input new string value:\n";
+			cin >> str;
+			writeStringAt(1, 4, str);
+			writeBoolAt(1, 2, 0, 1);
+			//print out new values
+			cout << "int2: " << getIntAt(1, 0) << "\n";
+			cout << "float: " << getRealAt(1, 260) << "\n";
+			cout << "string: " << getStringAt(1, 4) << "\n";
+			cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
 			Cli_Disconnect(Client);
+			getchar();
 		}
+		cout << "press any key to EXIT";
 		getchar();
 		return 0;
 	}
