@@ -467,6 +467,7 @@ int main()
 			float f;
 			string str;
 			//print out initial values
+			//getIntAt(datablock #, byte position within the datablock)
 			cout << "int: " << getIntAt(1, 2) << "\n";
 			cout << "int2: " << getIntAt(1, 4) << "\n";
 			//cout << "int3: " << getIntAt(1, 6) << "\n";
@@ -476,6 +477,7 @@ int main()
 			//reassign values
 			cout << "input new integer:\n";
 			cin >> x;
+			//same set up, but with last input being the value to set
 			writeIntAt(1, 4, x);
 			cout << "input new float value:\n";
 			cin >> f;

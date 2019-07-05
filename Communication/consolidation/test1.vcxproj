@@ -315,23 +315,18 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="C:\Users\megan\libplctag\src\examples\utils_windows.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">CompileAsC</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">CompileAsC</CompileAs>
-    </ClCompile>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="snap7\s7.cpp" />
     <ClCompile Include="snap7\snap7.cpp" />
-    <ClInclude Include="..\..\libplctag\src\lib\libplctag.h" />
+    <ClCompile Include="utils_windows.c" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\sol_threads.h" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\unix_threads.h" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\win_threads.h" />
-    <ClInclude Include="C:\Users\megan\libplctag\src\examples\utils.h" />
+    <ClInclude Include="libplctag\libplctag.h" />
     <ClInclude Include="snap7\s7.h" />
     <ClInclude Include="snap7\snap7.h" />
     <ClInclude Include="snap7\snap_platform.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
