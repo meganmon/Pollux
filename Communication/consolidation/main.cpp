@@ -137,14 +137,10 @@ void writeStringAt(int db, int start, string value) {
 void writeBoolAt(int db, int startbyte, int startbit, bool value) {
 	byte data[1];
 	cout << value << "\n";
-	getchar();
 	S7_SetBitAt(data, 0, startbit, value);
-	getchar();
-	int res = Cli_DBWrite(Client, db, startbyte, 1, &data);
-	getchar();
+	int res = Cli_DBWrite(Client, db, startbyte, 1, data);
 	if (Check(res, "writeBoolAt")) {
 		cout << "boolean reassigned\n";
-		getchar();
 	}
 
 }
@@ -505,7 +501,6 @@ int main()
 		Rack = 0;
 		Slot = 1;
 		cout << "Siemens 1500" << "\n";
-		getchar();
 		if (CliConnect())
 		{
 			int x;
