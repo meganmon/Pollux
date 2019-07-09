@@ -70,6 +70,21 @@ bool Check(int Result, const char * function)
 	}
 	return Result == 0;
 }
+void ListBlocks()
+{
+	TS7BlocksList List;
+	int res = Cli_ListBlocks(Client,&List);
+	if (Check(res, "List Blocks in AG"))
+	{
+		printf("  OBCount  : %d\n", List.OBCount);
+		printf("  FBCount  : %d\n", List.FBCount);
+		printf("  FCCount  : %d\n", List.FCCount);
+		printf("  SFBCount : %d\n", List.SFBCount);
+		printf("  SFCCount : %d\n", List.SFCCount);
+		printf("  DBCount  : %d\n", List.DBCount);
+		printf("  SDBCount : %d\n", List.SDBCount);
+	};
+}
 // get***At returns asked for data type given what datablock data is in and which byte to read from(in the case of boolean, also need to know what bit variable is at)
 int getIntAt(int db, int start) {
 	byte data[2];
@@ -121,7 +136,7 @@ void writeIntAt(int db, int start, int value) {
 void writeRealAt(int db, int start, float value) {
 	byte data[4];
 	S7_SetRealAt(data, 0, value);
-	int res = Cli_DBWrite(Client, db, start, 2, data);
+	int res = Cli_DBWrite(Client, db, start, 4, data);
 	if (Check(res, "writeRealAt")) {
 		cout << "float value reassigned\n";
 	}
@@ -372,10 +387,10 @@ int main()
 	}
 	case ROCKWELL:
 	{
-		cout << "Case Rockwell";
+		cout << "Case Rockwell\n";
 		/*protocol for a PATH: protocol stays constant, IP for machine, path should stay constant, LGX stays constant, elem size is size of element, count is size of array in tag to read (if array, currently only reading one number for tag), name is name of the tag*/
 		const char * DINT_PATH = ("protocol=ab_eip&gateway=" + IP_address + "&path=1,0&cpu=LGX&elem_size=4&elem_count=1&name=DINT_Test").c_str();
-		printf(("protocol=ab_eip&gateway=" + IP_address + "&path=1,0&cpu=LGX&elem_size=4&elem_count=1&name=DINT_Test").c_str());
+		//printf(("protocol=ab_eip&gateway=" + IP_address + "&path=1,0&cpu=LGX&elem_size=4&elem_count=1&name=DINT_Test").c_str());
 		/*example paths:
 		const char * INT_PATH = "protocol=ab_eip&gateway=10.0.0.1&path=1,0&cpu=LGX&elem_size=4&elem_count=1&name=INT_Test";
 		const char * STRING_PATH = "protocol=ab_eip&gateway=10.0.0.1&path=1,0&cpu=LGX&elem_size=88&elem_count=1&name=STRING_Test";
@@ -412,8 +427,13 @@ int main()
 		/*print out the boolean*/
 		b = read_boolR(bool_tag);
 		fprintf(stderr, "BOOL_TEST = %d\n", b);
-
-		if (b) { printf("yeet\n"); }
+	
+		cout << "exit?\n";
+		if (getchar() == 'y') {
+			Cli_Disconnect(Client);
+			getchar();
+			return 0;
+		}
 
 		printf("Input new dint for DINT_Test:\n");
 		cin >> x;
@@ -443,6 +463,7 @@ int main()
 		cout << "New STRING_TEST: " << s << "\n";
 		printf("Boolean: %d\n", b);
 		/* we are done */
+		getchar();
 		destroyRockTags();
 
 		printf("Press any key to exit");
@@ -459,35 +480,43 @@ int main()
 		cout << "Siemens 300" << "\n";
 		if (CliConnect())
 		{
+			ListBlocks();
 			int x;
 			float f;
 			string str;
 			//print out initial values
 			//getIntAt(datablock #, byte position within the datablock)
-			cout << "int: " << getIntAt(1, 2) << "\n";
-			cout << "int2: " << getIntAt(1, 4) << "\n";
+			cout << "int: " << getIntAt(1, 0) << "\n";
+			//cout << "int2: " << getIntAt(1, 4) << "\n";
 			//cout << "int3: " << getIntAt(1, 6) << "\n";
-			cout << "float: " << getRealAt(1, 8) << "\n";
-			cout << "string: " << getStringAt(1, 12) << "\n";
-			cout << "boolean: " << getBoolAt(1, 0, 1) << "\n";
+			cout << "float: " << getRealAt(1, 260) << "\n";
+			cout << "string: " << getStringAt(1, 2) << "\n";
+			cout << "boolean: " << getBoolAt(1, 0, 258) << "\n";
+			cout << "exit?\n";
+			if (getchar() == 'y') {
+				Cli_Disconnect(Client);
+				getchar();
+				return 0;
+			}
 			//reassign values
 			cout << "input new integer:\n";
 			cin >> x;
 			//same set up, but with last input being the value to set
-			writeIntAt(1, 4, x);
+			writeIntAt(1, 0, x);
 			cout << "input new float value:\n";
 			cin >> f;
-			writeRealAt(1, 8, f);
+			writeRealAt(1, 260, f);
 			cout << "input new string value:\n";
 			cin >> str;
-			writeStringAt(1, 12, str);
-			writeBoolAt(1, 0, 1, 1);
+			writeStringAt(1, 2, str);
+			writeBoolAt(1, 258, 0, 1);
 			//print out new values
-			cout << "int2: " << getIntAt(1, 4) << "\n";
-			cout << "float: " << getRealAt(1, 8) << "\n";
-			cout << "string: " << getStringAt(1, 12) << "\n";
-			cout << "boolean: " << getBoolAt(1, 0, 1) << "\n";
+			cout << "int2: " << getIntAt(1, 0) << "\n";
+			cout << "float: " << getRealAt(1, 260) << "\n";
+			cout << "string: " << getStringAt(1, 2) << "\n";
+			cout << "boolean: " << getBoolAt(1, 258, 0) << "\n";
 			Cli_Disconnect(Client);
+			getchar();
 
 		}
 		cout << "press any key to EXIT";
@@ -497,7 +526,7 @@ int main()
 	case SIEMENS1500:
 	{
 		Address = IP_address.c_str();
-		//Address = "10.0.0.12";
+		//Address = "10.0.0.9";
 		Rack = 0;
 		Slot = 1;
 		cout << "Siemens 1500" << "\n";
@@ -511,7 +540,12 @@ int main()
 			cout << "float: " << getRealAt(1, 260) << "\n";
 			cout << "string: " << getStringAt(1, 4) << "\n";
 			cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
-			//reassign values
+			cout << "exit?\n";
+			if (getchar() == 'y') {
+				Cli_Disconnect(Client);
+				getchar();
+				return 0;
+			}			//reassign values
 			cout << "input new integer:\n";
 			cin >> x;
 			writeIntAt(1, 0, x);

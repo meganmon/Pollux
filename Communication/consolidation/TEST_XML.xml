@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <ROOT>
 	<PLCs>
-		<PLC Type="Siemens" Model="200" IPAddress="10.0.0.12">
+		<PLC Type="siemens" Model="300" IPAddress="10.0.0.9">
 		</PLC>
 	</PLCs>
 </ROOT>
