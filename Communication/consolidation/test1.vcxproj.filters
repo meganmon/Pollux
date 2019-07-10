@@ -13,6 +13,9 @@
     <ClCompile Include="utils_windows.c">
       <Filter>Other</Filter>
     </ClCompile>
+    <ClCompile Include="backup.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\sol_threads.h">

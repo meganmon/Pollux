@@ -1,7 +1,16 @@
 <?xml version="1.0" ?>
 <ROOT>
 	<PLCs>
-		<PLC Type="siemens" Model="300" IPAddress="10.0.0.9">
+		<PLC Type="simens" Model="300" IPAddress="10.0.0.9">
 		</PLC>
 	</PLCs>
+	<DATA Type="int" name="INT_Test">
+	</DATA>
+	<DATA Type="string" name="STRING_Test">
+	</DATA>
+	<DATA Type="bool" name="BOOL_Test">
+	</DATA>
+	<DATA Type="real" name="REAL_Test">
+	</DATA>
+
 </ROOT>

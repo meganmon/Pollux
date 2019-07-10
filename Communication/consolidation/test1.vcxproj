@@ -315,6 +315,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="backup.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="snap7\s7.cpp" />
     <ClCompile Include="snap7\snap7.cpp" />
