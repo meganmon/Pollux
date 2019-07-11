@@ -101,38 +101,10 @@
 //	}	if (type == "dint") {
 //		cout << S7_GetDIntAt(data, offset) << "\n";
 //	}	if (type == "bool") {
-//		cout <<
+//		cout << S7_GetBitAt(data, offset, offBit) << "\n";
 //	}
 //}
-//// get***At returns asked for data type given what datablock data is in and which byte to read from(in the case of boolean, also need to know what bit variable is at)
-//int getIntAt(int offset, byte data[]) {
-//	uint16_t integer = S7_GetUIntAt(data, 0);
-//}
-//float getRealAt(int db, int start) {
-//	byte data[4];
-//	float out = 0;
-//	int res = Cli_DBRead(Client, db, start, 4, &data);
-//	if (Check(res, "getRealAt")) {
-//		out = S7_GetRealAt(data, 0);
-//	}
-//	return out;
-//}
-//bool getBoolAt(int db, int startByte, int startBit) {
-//	byte data[1];
-//	int temp;
-//	bool out = 0;
-//	int res = Cli_DBRead(Client, db, startByte, 1, &data);
-//	if (Check(res, "getBoolAt")) {
-//		out = S7_GetBitAt(data, 0, startBit);
-//	}
-//	return out;
-//}
-//string getStringAt(int offset, byte data[]) {
-//	string out;
-//	//int res = Cli_DBRead(Client, db, start, 256, &data);
-//	out = S7_GetStringAt(data, offset);
-//	return out;
-//}
+//
 ////similar to get***At but also need to input value
 //void writeIntAt(int db, int start, int value) {
 //	byte data[2]; // for 16 bit integer
@@ -364,16 +336,76 @@
 //
 ///*end set up for ROCKWELL SERVER*/
 ////-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-.-.--.-..-.-.-.-.-.-.-.-.-..--.-.-.
+//string floatsToString(float real[], int max_size) {
+//	string out;
+//	for (int i = 0; i < max_size; i++) {
+//		if (i == 0) {
+//			out.append("[");
+//		}
+//		out.append(to_string(real[i]));
+//		if (i == max_size - 1) {
+//			out.append("]");
+//		}
+//		else {
+//			out.append(",");
+//		}
+//	}
+//	return out;
+//}
 //
 //int main()
 //{
 //	//database name that is to be created
-//	string newDB = "test3";
+//	//string newDB = "test3";
 //	dbconn = PQconnectdb(conninfo);
 //	if (PQstatus(dbconn) == CONNECTION_BAD) {
 //		printf("Unable to connect to database\n");
 //		Sleep(3000); //to read console
 //	}
+//	//DROP TABLE IF EXISTS results
+//	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT, station_fk TEXT, cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, reals REAL[])");
+//
+//	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+//		printf("could not create table");
+//		PQfinish(dbconn);
+//		getchar();
+//		return 0;
+//	}
+//
+//	PQclear(res);
+//	float real[] = { 1.2, 2.3, 3.4, 4.5 };
+//	int max_size = sizeof(real) / sizeof(real[0]);
+//	string reals = floatsToString(real, max_size);
+//
+//	/*
+//	res = PQexec(dbconn, ("INSERT INTO results VALUES('t2','2','text', 2, 300, 4000, ARRAY " + reals + ")").c_str());
+//	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+//	printf("could not add values");
+//	PQfinish(dbconn);
+//	getchar();
+//	return 0;
+//	}
+//	PQclear(res);*/
+//
+//	res = PQexec(dbconn, "SELECT * FROM results");
+//	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+//
+//		printf("No data retrieved\n");
+//		PQclear(res);
+//		PQfinish(dbconn);
+//		getchar();
+//		return 0;
+//	}
+//
+//	int rows = PQntuples(res);
+//
+//	for (int i = 0; i<rows; i++) {
+//
+//		printf("%s %s %s %s %s %s %s\n", PQgetvalue(res, i, 0),
+//			PQgetvalue(res, i, 1), PQgetvalue(res, i, 2), PQgetvalue(res, i, 3), PQgetvalue(res, i, 4), PQgetvalue(res, i, 5), PQgetvalue(res, i, 6));
+//	}
+//
+//	PQclear(res);
 //	printf("Currently connected to: %s \n", PQdb(dbconn));  //what db we are currently connected to
 //															//disconnect from default
 //	PQfinish(dbconn);
@@ -386,48 +418,49 @@
 //	if (myfile.fail()) {
 //		printf("cannot find file");
 //		getchar();
-//		return 0;
+//		state = 4;
 //	}
-//	vector<char> buffer((istreambuf_iterator<char>(myfile)), istreambuf_iterator<char>());
-//	buffer.push_back('\0');
-//	// Parse the buffer using the xml file parsing library into doc 
-//	doc.parse<0>(&buffer[0]);
-//	// Find our root node
-//	root_node = doc.first_node("ROOT");
-//	xml_node<> * plcs_node = root_node->first_node("PLCs");
-//	xml_node<> * plc_node = plcs_node->first_node("PLC");
-//	Make = plc_node->first_attribute("Type")->value(); // assign the brand
-//	Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
-//	IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
-//	cout << "IP Address: " << IP_address << "\n";
-//	//make the make readable regardless of upper or lower case
-//	transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
-//	string tempType;
-//	for (xml_node<> * data_node = root_node->first_node("DATA"); data_node; data_node = data_node->next_sibling())
-//	{
-//		tempType = data_node->first_attribute("Type")->value();
-//		tagTypes.push_back(tempType);
-//		tagNames.push_back(data_node->first_attribute("name")->value());
-//		transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
+//	else {
+//		vector<char> buffer((istreambuf_iterator<char>(myfile)), istreambuf_iterator<char>());
+//		buffer.push_back('\0');
+//		// Parse the buffer using the xml file parsing library into doc 
+//		doc.parse<0>(&buffer[0]);
+//		// Find our root node
+//		root_node = doc.first_node("ROOT");
+//		xml_node<> * plcs_node = root_node->first_node("PLCs");
+//		xml_node<> * plc_node = plcs_node->first_node("PLC");
+//		Make = plc_node->first_attribute("Type")->value(); // assign the brand
+//		Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
+//		IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
+//																	  //cout << "IP Address: " << IP_address << "\n";
+//																	  //make the make readable regardless of upper or lower case
+//		transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
+//		string tempType;
+//		for (xml_node<> * data_node = root_node->first_node("DATA"); data_node; data_node = data_node->next_sibling())
+//		{
+//			tempType = data_node->first_attribute("Type")->value();
+//			tagTypes.push_back(tempType);
+//			tagNames.push_back(data_node->first_attribute("name")->value());
+//			transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
+//			if (Make == "ROCKWELL") {
+//				tagSizes.push_back(assignTagSize(tempType));
+//			}
+//			else if (Make == "SIEMENS") {
+//				tagOffsets.push_back(assignTagOffset(tempType));
+//			}
+//		}
 //		if (Make == "ROCKWELL") {
-//			tagSizes.push_back(assignTagSize(tempType));
+//			cout << "Model recognized as Rockwell\n";
+//			state = 1;
 //		}
-//		else if (Make == "siemens") {
-//			tagOffsets.push_back(assignTagOffset(tempType));
-//		}
-//	}
-//	cout << tagTypes.size() << "\n";
-//	if (Make == "ROCKWELL") {
-//		cout << "Model recognized as Rockwell\n";
-//		state = 1;
-//	}
-//	if (Make == "SIEMENS") {
-//		Client = Cli_Create(); // initialize the client connection
-//		if (Model == "300") { // fill out for the different models that use this set up rather than the other one
-//			state = 2;
-//		}
-//		else {
-//			state = 3;
+//		if (Make == "SIEMENS") {
+//			Client = Cli_Create(); // initialize the client connection
+//			if (Model == "300") { // fill out for the different models that use this set up rather than the other one
+//				state = 2;
+//			}
+//			else {
+//				state = 3;
+//			}
 //		}
 //	}
 //	switch (state) {
@@ -478,14 +511,6 @@
 //		///*change the value of boolean*/
 //		//toggle_boolR(bool_tag);
 //
-//		///* print out the data */
-//		//printf("New DINT_TEST: %d\n", read_intR(d_tag));
-//		//printf("New INT_TEST: %d\n", read_intR(int_tag));
-//		//printf("New FLOAT_Test: %f\n", read_realR(float_tag));
-//		//b = read_boolR(bool_tag);
-//		//s = read_stringR(str_tag);
-//		//cout << "New STRING_TEST: " << readStr << "\n";
-//		//printf("Boolean: %d\n", b);
 //		///* we are done */
 //		getchar();
 //		destroyRockTags();
@@ -508,23 +533,19 @@
 //			int x;
 //			float f;
 //			string str;
-//			//print out initial values
-//			//getIntAt(datablock #, byte position within the datablock)
 //			byte data[264];
-//
-//			int res = Cli_DBRead(Client, 0, 0, 264, &data);
+//			int offset = 0;
+//			//current datablock set to DB1
+//			int res = Cli_DBRead(Client, 1, 0, 264, &data);
 //			if (Check(res, "datablock read")) {
 //				for (int i = 0; i < tagTypes.size(); i++) {
-//
-//					cout << tagNames[i] << ": " << readRockwellType(myTags[i], tagTypes[i]) << "\n";
+//					cout << tagNames[i] << ": ";
+//					readSiemensType(tagTypes[i], offset, data);
+//					cout << "\n";
+//					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
+//					offset += tagOffsets[i];
 //				}
 //			}
-//			cout << "int: " << getIntAt(1, 0) << "\n";
-//			//cout << "int2: " << getIntAt(1, 4) << "\n";
-//			//cout << "int3: " << getIntAt(1, 6) << "\n";
-//			cout << "float: " << getRealAt(1, 260) << "\n";
-//			cout << "string: " << getStringAt(1, 2) << "\n";
-//			cout << "boolean: " << getBoolAt(1, 0, 258) << "\n";
 //			cout << "exit?\n";
 //			if (getchar() == 'y') {
 //				Cli_Disconnect(Client);
@@ -543,11 +564,6 @@
 //			cin >> str;
 //			writeStringAt(1, 2, str);
 //			writeBoolAt(1, 258, 0, 1);
-//			//print out new values
-//			cout << "int2: " << getIntAt(1, 0) << "\n";
-//			cout << "float: " << getRealAt(1, 260) << "\n";
-//			cout << "string: " << getStringAt(1, 2) << "\n";
-//			cout << "boolean: " << getBoolAt(1, 258, 0) << "\n";
 //			Cli_Disconnect(Client);
 //			getchar();
 //
@@ -567,12 +583,21 @@
 //		{
 //			int x;
 //			float f;
-//			string str;
-//			//print out initial values
-//			cout << "int: " << getIntAt(1, 0) << "\n";
-//			cout << "float: " << getRealAt(1, 260) << "\n";
-//			cout << "string: " << getStringAt(1, 4) << "\n";
-//			cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
+//			//string str;
+//			////print out initial values
+//			byte data[264];
+//			int offset = 0;
+//			//current datablock set to DB1
+//			int res = Cli_DBRead(Client, 1, 0, 264, &data);
+//			if (Check(res, "datablock read")) {
+//				for (int i = 0; i < tagTypes.size(); i++) {
+//					cout << tagNames[i] << ": ";
+//					readSiemensType(tagTypes[i], offset, data);
+//					cout << "\n";
+//					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
+//					offset += tagOffsets[i];
+//				}
+//			}
 //			cout << "exit?\n";
 //			if (getchar() == 'y') {
 //				Cli_Disconnect(Client);
@@ -586,14 +611,14 @@
 //			cin >> f;
 //			writeRealAt(1, 260, f);
 //			cout << "input new string value:\n";
-//			cin >> str;
-//			writeStringAt(1, 4, str);
+//			//	cin >> str;
+//			//	writeStringAt(1, 4, str);
 //			writeBoolAt(1, 2, 0, 1);
-//			//print out new values
-//			cout << "int2: " << getIntAt(1, 0) << "\n";
-//			cout << "float: " << getRealAt(1, 260) << "\n";
-//			cout << "string: " << getStringAt(1, 4) << "\n";
-//			cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
+//			////print out new values
+//			//cout << "int2: " << getIntAt(1, 0) << "\n";
+//			//cout << "float: " << getRealAt(1, 260) << "\n";
+//			//cout << "string: " << getStringAt(1, 4) << "\n";
+//			//cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
 //			Cli_Disconnect(Client);
 //			getchar();
 //		}

@@ -35,6 +35,7 @@ vector <string> tagNames;
 vector <int32_t> myTags;
 vector <string> tagSizes;
 vector <int> tagOffsets;
+vector <float> real;
 
 /*set up for Postgressql*/
 //the libraries and set up for the Postgresql
@@ -96,8 +97,9 @@ void readSiemensType(string type, int offset, byte data[], int offBit = 0) {
 		cout << S7_GetStringAt(data,offset) << "\n";
 	}	if (type == "int") {
 		cout << S7_GetIntAt(data, offset) << "\n";
-	}	if (type == "real" || type == "int") {
+	}	if (type == "real" || type == "float") {
 		cout << S7_GetRealAt(data, offset) << "\n";
+		real.push_back(S7_GetRealAt(data, offset));
 	}	if (type == "dint") {
 		cout << S7_GetDIntAt(data, offset) << "\n";
 	}	if (type == "bool") {
@@ -152,19 +154,6 @@ bool CliConnect()
 	return res == 0;
 }
 
-/*end set up for SIEMENS SERVER*/
-
-//-.-.-.-.-.-.-.--.-.-.-.--.-.--.-.-.-.-..-.-..-.-.-.-.-.-..-.--.-.-.-.-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-
-string assignTagSize(string type) {
-	if (type == "string") {
-		return "88";
-	}	if (type == "real" || type == "float" || type == "dint" || type == "int") {
-		return "4";
-	}	if (type == "bool") {
-		return "1";
-	}
-
-}
 int assignTagOffset(string type) {
 	if (type == "string") {
 		return 256;
@@ -175,6 +164,10 @@ int assignTagOffset(string type) {
 	}
 
 }
+/*end set up for SIEMENS SERVER*/
+
+//-.-.-.-.-.-.-.--.-.-.-.--.-.--.-.-.-.-..-.-..-.-.-.-.-.-..-.--.-.-.-.-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-
+
 /*set up for ROCKWELL SERVER*/
 /* define tag paths*/
 
@@ -185,15 +178,21 @@ int assignTagOffset(string type) {
 #define INT_SIZE 4
 #define FLOAT_SIZE 4
 #define STRING_DATA_SIZE 82
+
+string assignTagSize(string type) {
+	if (type == "string") {
+		return "88";
+	}	if (type == "real" || type == "float" || type == "dint" || type == "int") {
+		return "4";
+	}	if (type == "bool") {
+		return "1";
+	}
+
+}
 /*define number of elements in arrays*/
 #define ELEM_COUNT 1  //assumes we are not reading an array
 #define DATA_TIMEOUT 5000
-/*set up variables for tags*/
-int32_t d_tag = 0;
-int32_t int_tag = 0;
-int32_t str_tag = 0;
-int32_t bool_tag = 0;
-int32_t float_tag = 0;
+
 /*shorter way to destroy all tags*/
 void destroyRockTags() {
 	for (int i = 0; i < tagNames.size(); i++) {
@@ -215,7 +214,6 @@ int32_t create_tagR(const char *path)
 	}
 	return tag;
 }
-/*FOR READING TAGS: currently elem count is set to 1 element, but capability to read an array for each tag has been kept, except for in updateStringR*/
 int read_intR(int32_t tag) {
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
 	if (rc != PLCTAG_STATUS_OK) {
@@ -251,7 +249,7 @@ bool read_boolR(int32_t tag) {
 		plc_tag_destroy(tag);
 		return 0;
 	}
-	return plc_tag_get_uint8(bool_tag, 0);
+	return plc_tag_get_uint8(tag, 0);
 }
 string read_stringR(int32_t tag) {
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
@@ -329,13 +327,133 @@ void update_intR(int32_t tag, int x) {
 }
 void toggle_boolR(int32_t tag) {
 	bool b = read_boolR(tag);
-	if (b) { plc_tag_set_uint8(bool_tag, 0, 0); }
-	else { plc_tag_set_uint8(bool_tag, 0, 1); }
-	int rc = plc_tag_write(bool_tag, DATA_TIMEOUT);
+	if (b) { plc_tag_set_uint8(tag, 0, 0); }
+	else { plc_tag_set_uint8(tag, 0, 1); }
+	int rc = plc_tag_write(tag, DATA_TIMEOUT);
 }
 
 /*end set up for ROCKWELL SERVER*/
 //-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-.-.--.-..-.-.-.-.-.-.-.-.-..--.-.-.
+
+/*SET UP FOR MISCELLANEOUS FUNCTIONS*/
+
+string floatsToString(vector <float> real) {		//converts float array to string for uploading to DB
+	string out;
+	int max_size = real.size();
+	for (int i = 0; i < max_size; i++) {
+		if (i == 0) {
+			out.append("[");
+		}
+		out.append(to_string(real[i]));
+		if (i == max_size - 1) {
+			out.append("]");
+		}
+		else {
+			out.append(",");
+		}
+	}
+	return out;
+}
+
+void readXML(const char file[]) {		//reads through XML document to assign variables and tags to read, then assigns state according to PLC type
+	/*READ THE XML Doc*/
+	xml_document<> doc;
+	xml_node<> * root_node;
+	ifstream myfile(file); // open whatever file the data is in (should be reading from Communication folder)
+	if (myfile.fail()) {
+		printf("cannot find file");
+		getchar();
+		state = 4;
+	}
+	else {
+		vector<char> buffer((istreambuf_iterator<char>(myfile)), istreambuf_iterator<char>());
+		buffer.push_back('\0');
+		// Parse the buffer using the xml file parsing library into doc 
+		doc.parse<0>(&buffer[0]);
+		// Find our root node
+		root_node = doc.first_node("ROOT");
+		xml_node<> * plcs_node = root_node->first_node("PLCs");
+		xml_node<> * plc_node = plcs_node->first_node("PLC");
+		Make = plc_node->first_attribute("Type")->value(); // assign the brand
+		Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
+		IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
+		 //make the make readable regardless of upper or lower case
+		transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
+		string tempType;
+		for (xml_node<> * data_node = root_node->first_node("DATA"); data_node; data_node = data_node->next_sibling())
+		{
+			tempType = data_node->first_attribute("Type")->value();
+			transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
+			tagTypes.push_back(tempType);
+			tagNames.push_back(data_node->first_attribute("name")->value());
+			if (Make == "ROCKWELL") {
+				tagSizes.push_back(assignTagSize(tempType));
+			}
+			else if (Make == "SIEMENS") {
+				tagOffsets.push_back(assignTagOffset(tempType));  
+			}
+		}
+		if (Make == "ROCKWELL") {
+			cout << "Model recognized as Rockwell\n";
+			state = 1;
+		}
+		if (Make == "SIEMENS") {
+			Client = Cli_Create(); // initialize the client connection
+			if (Model == "300") { // fill out for the different models that use this set up rather than the other one
+				state = 2;
+			}
+			else {
+				state = 3;
+			}
+		}
+	}
+}
+void readDB() {
+	res = PQexec(dbconn, "SELECT * FROM testing WHERE pk = 'test10'");
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+
+		printf("No data retrieved\n");
+		PQclear(res);
+		PQfinish(dbconn);
+		getchar();
+	}
+	int rows = PQntuples(res);
+	if (rows == 0) {
+		printf("not exists");
+	}
+	for (int i = 0; i<rows; i++) {
+
+		printf("%s %s %s\n", PQgetvalue(res, i, 0),
+			PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
+	}
+	PQclear(res);
+}
+bool ifPKexists(string PK, string table) {
+	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE pk = '" + PK + "'").c_str());
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+
+		printf("No data retrieved\n");
+		PQclear(res);
+		PQfinish(dbconn);
+		getchar();
+		return 0;
+	}
+
+	int rows = PQntuples(res);
+	if (rows == 0) {
+		PQclear(res);
+		printf("not exists");
+		return 0;
+	}
+	else {
+		PQclear(res);
+		return 1;
+	}
+}
+
+//-~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~_~_~_~_~__~_~_~_~_ 
+// START MAIN LOOP
+//_~_~_~_~_~_~__~_~_~_~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~
 
 int main()
 {
@@ -347,7 +465,8 @@ int main()
 		Sleep(3000); //to read console
 	}
 	//DROP TABLE IF EXISTS results
-	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT, station_fk TEXT, cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, reals REAL[])");
+	//PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT, station_fk TEXT, cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, reals REAL[])");
+	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS testing(pk TEXT PRIMARY KEY, fail_bit INTEGER, reals REAL[])");
 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		printf("could not create table");
@@ -358,8 +477,7 @@ int main()
 
 	PQclear(res);
 /*
-	res = PQexec(dbconn, "INSERT INTO results VALUES('txt','2','text', 2, 300, 4000, ARRAY [1.01,9.00])");
-
+	res = PQexec(dbconn, ("INSERT INTO results VALUES('t2','2','text', 2, 300, 4000, ARRAY " + reals + ")").c_str());
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		printf("could not add values");
 		PQfinish(dbconn);
@@ -367,84 +485,15 @@ int main()
 		return 0;
 	}
 	PQclear(res);*/
-	res = PQexec(dbconn, "SELECT * FROM results");
-
-	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-
-		printf("No data retrieved\n");
-		PQclear(res);
-		PQfinish(dbconn);
-		getchar();
-		return 0;
-	}
-
-	int rows = PQntuples(res);
-
-	for (int i = 0; i<rows; i++) {
-
-		printf("%s %s %s %s %s %s %s\n", PQgetvalue(res, i, 0),
-			PQgetvalue(res, i, 1), PQgetvalue(res, i, 2), PQgetvalue(res, i, 3), PQgetvalue(res, i, 4), PQgetvalue(res, i, 5), PQgetvalue(res, i, 6));
-	}
-
-	PQclear(res);
-	printf("Currently connected to: %s \n", PQdb(dbconn));  //what db we are currently connected to
-															//disconnect from default
-	PQfinish(dbconn);
 	//end database area
 
-	/*READ THE XML Doc*/
-	xml_document<> doc;
-	xml_node<> * root_node;
-	ifstream myfile("TEST_XML.xml"); // open whatever file the data is in (should be reading from Communication folder)
-	if (myfile.fail()) {
-		printf("cannot find file");
-		getchar();
-		return 0;
-	}
-	vector<char> buffer((istreambuf_iterator<char>(myfile)), istreambuf_iterator<char>());
-	buffer.push_back('\0');
-	// Parse the buffer using the xml file parsing library into doc 
-	doc.parse<0>(&buffer[0]);
-	// Find our root node
-	root_node = doc.first_node("ROOT");
-	xml_node<> * plcs_node = root_node->first_node("PLCs");
-	xml_node<> * plc_node = plcs_node->first_node("PLC");
-	Make = plc_node->first_attribute("Type")->value(); // assign the brand
-	Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
-	IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
-	//cout << "IP Address: " << IP_address << "\n";
-	//make the make readable regardless of upper or lower case
-	transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
-	string tempType;
-	for (xml_node<> * data_node = root_node->first_node("DATA"); data_node; data_node = data_node->next_sibling())
-	{
-		tempType = data_node->first_attribute("Type")->value();
-		tagTypes.push_back(tempType);
-		tagNames.push_back(data_node->first_attribute("name")->value());
-		transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
-		if (Make == "ROCKWELL") {
-			tagSizes.push_back(assignTagSize(tempType));
-		}else if (Make == "SIEMENS") {
-			tagOffsets.push_back(assignTagOffset(tempType));
-		}
-	}
-	if (Make == "ROCKWELL") {
-		cout << "Model recognized as Rockwell\n";
-		state = 1;
-	}
-	if (Make == "SIEMENS") {
-		Client = Cli_Create(); // initialize the client connection
-		if (Model == "300") { // fill out for the different models that use this set up rather than the other one
-			state = 2;
-		}
-		else {
-			state = 3;
-		}
-	}
+	readXML("TEST_XML.xml");
+
 	switch (state) {
 	default:
 	{
 		cout << "No Recognized PLC Models found in XML document";
+		if (!ifPKexists("test21", "testing")) { printf("yeet"); }
 		getchar();
 		break;
 	}
@@ -463,37 +512,21 @@ int main()
 		}
 	
 		cout << "exit?\n";
-		if (getchar() == 'y') {
+		if (getchar() != 'n') {
 			destroyRockTags();
+			PQfinish(dbconn);
 			getchar();
 			return 0;
 		}
 		string newstr;
-
-		//printf("Input new dint for DINT_Test:\n");
-		//cin >> x;
-		//printf("Input new in for INT_Test:\n");
-		//cin >> p;
-		//printf("Input new string for STRING_Test:\n");
-		//cin >> newstr;
-		//printf("Input new float for FLOAT_Test:\n");
-		//cin >> f;
-
-		///* INTEGER AND DOUBLE INTEGER WRITE */
-		//update_intR(d_tag, x);
-		//update_intR(int_tag, p);
-		///*FLOAT WRITE*/
-		//update_floatR(float_tag, f);
-		///*STRING WRITE*/
-		//update_stringR(myTags[0], 0, newstr);
-		///*change the value of boolean*/
-		//toggle_boolR(bool_tag);
 
 		///* we are done */
 		getchar();
 		destroyRockTags();
 
 		printf("Press any key to exit");
+
+		PQfinish(dbconn);
 		getchar();
 
 		return 0;
@@ -511,22 +544,40 @@ int main()
 			int x;
 			float f;
 			string str;
-			byte data[264];
+			byte data[280];
 			int offset = 0;
 			//current datablock set to DB1
-			int res = Cli_DBRead(Client, 1, 0, 264, &data);
-			if (Check(res, "datablock read")) {
+			int sres = Cli_DBRead(Client, 1, 0, 280, &data);
+			if (Check(sres, "datablock read")) {
 				for (int i = 0; i < tagTypes.size(); i++) {
 					cout << tagNames[i] << ": ";
 					readSiemensType(tagTypes[i], offset, data);
 					cout << "\n";
 					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
+					//TEST WITH MULTIPLE BOOLS - other option is just to input offsets in the xml though....
 					offset += tagOffsets[i];
 				}
 			}
+			//upload results to db
+
+			string reals = floatsToString(real);
+			string strings;
+			cout << "input new PK";
+			cin >> strings;
+			getchar();
+			res = PQexec(dbconn, ("INSERT INTO testing VALUES('" + strings + "', 4000, ARRAY " + reals + ")").c_str());
+			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+				printf("could not add values");
+				PQfinish(dbconn);
+				getchar();
+				return 0;
+			}
+			PQclear(res);
+			readDB();
 			cout << "exit?\n";
-			if (getchar() == 'y') {
+			if (getchar() != 'n') {
 				Cli_Disconnect(Client);
+				PQfinish(dbconn);
 				getchar();
 				return 0;
 			}
@@ -548,6 +599,8 @@ int main()
 		}
 		cout << "press any key to EXIT";
 		getchar();
+
+		PQfinish(dbconn);
 		return 0;
 	}
 	case SIEMENS1500:
@@ -566,42 +619,32 @@ int main()
 			byte data[264];
 			int offset = 0;
 			//current datablock set to DB1
-			int res = Cli_DBRead(Client, 1, 0, 264, &data);
-			if (Check(res, "datablock read")) {
+			int sres = Cli_DBRead(Client, 1, 0, 264, &data);
+			if (Check(sres, "datablock read")) {
 				for (int i = 0; i < tagTypes.size(); i++) {
 					cout << tagNames[i] << ": ";
 					readSiemensType(tagTypes[i], offset, data);
 					cout << "\n";
 					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
+					//THIS DEFINITELY NEED TO BE LOOKED AT BEFORE CONTINUING!!!!!
 					offset += tagOffsets[i];
 				}
 			}
 			cout << "exit?\n";
-			if (getchar() == 'y') {
+			if (getchar() != 'n') {
 				Cli_Disconnect(Client);
 				getchar();
+
+				PQfinish(dbconn);
 				return 0;
-			}			//reassign values
-			cout << "input new integer:\n";
-			cin >> x;
-			writeIntAt(1, 0, x);
-			cout << "input new float value:\n";
-			cin >> f;
-			writeRealAt(1, 260, f);
-			cout << "input new string value:\n";
-		//	cin >> str;
-		//	writeStringAt(1, 4, str);
-			writeBoolAt(1, 2, 0, 1);
-			////print out new values
-			//cout << "int2: " << getIntAt(1, 0) << "\n";
-			//cout << "float: " << getRealAt(1, 260) << "\n";
-			//cout << "string: " << getStringAt(1, 4) << "\n";
-			//cout << "boolean: " << getBoolAt(1, 2, 0) << "\n";
+			}
 			Cli_Disconnect(Client);
 			getchar();
 		}
 		cout << "press any key to EXIT";
 		getchar();
+
+		PQfinish(dbconn);
 		return 0;
 	}
 	case ERROR:
@@ -609,7 +652,9 @@ int main()
 		// no current use for this, but set up in case of running into additional errors
 		cout << "Error";
 		getchar();
-		break;
+
+		PQfinish(dbconn);
+		return 0;
 	}
 	}
 
