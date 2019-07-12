@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <ROOT>
 	<PLCs>
-		<PLC Type="simens" Model="300" IPAddress="10.0.0.9">
+		<PLC Type="siemens" Model="300" IPAddress="10.0.0.9">
 		</PLC>
 	</PLCs>
 	<DATA Type="int" name="INT_Test">
@@ -19,6 +19,46 @@
 	<DATA Type="real" name="REAL_Test">
 	</DATA>
 	<DATA Type="real" name="REAL_Test">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST1">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST2">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST3">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST4">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST5">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST6">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST7">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST8">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST9">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST0">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST1">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST2">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST3">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST4">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST5">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST6">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST7">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST8">
+	</DATA>
+	<DATA Type="bool" name="BOOL_TEST9">
+	</DATA>
+	<DATA Type="int" name="POST_TEST">
 	</DATA>
 
 </ROOT>

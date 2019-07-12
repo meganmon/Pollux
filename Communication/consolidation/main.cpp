@@ -52,7 +52,6 @@ const char *conninfo = "host=localhost port=5432 user=postgres password=Pollux12
 S7Object Client;
 
 const char *Address;     // PLC IP Address
-						 //const char * Address;
 int Rack, Slot; // Default Rack and Slot
 
 int ok = 0; // Number of test pass
@@ -92,7 +91,7 @@ void ListBlocks()
 		printf("  SDBCount : %d\n", List.SDBCount);
 	};
 }
-void readSiemensType(string type, int offset, byte data[], int offBit = 0) {
+void readSiemensType(string type, int offset, int Bit, byte data[]) {
 	if (type == "string") {
 		cout << S7_GetStringAt(data,offset) << "\n";
 	}	if (type == "int") {
@@ -103,7 +102,7 @@ void readSiemensType(string type, int offset, byte data[], int offBit = 0) {
 	}	if (type == "dint") {
 		cout << S7_GetDIntAt(data, offset) << "\n";
 	}	if (type == "bool") {
-		cout << S7_GetBitAt(data, offset, offBit) << "\n";
+		cout << S7_GetBitAt(data, offset, Bit) << "\n";
 	}
 }
 
@@ -355,7 +354,7 @@ string floatsToString(vector <float> real) {		//converts float array to string f
 	return out;
 }
 
-void readXML(const char file[]) {		//reads through XML document to assign variables and tags to read, then assigns state according to PLC type
+void readXML(const char *file) {		//reads through XML document "file" to assign variables and tags to read, then assigns state according to PLC type
 	/*READ THE XML Doc*/
 	xml_document<> doc;
 	xml_node<> * root_node;
@@ -409,7 +408,7 @@ void readXML(const char file[]) {		//reads through XML document to assign variab
 	}
 }
 void readDB() {
-	res = PQexec(dbconn, "SELECT * FROM testing WHERE pk = 'test10'");
+	res = PQexec(dbconn, "SELECT * FROM testing");
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 
 		printf("No data retrieved\n");
@@ -428,7 +427,7 @@ void readDB() {
 	}
 	PQclear(res);
 }
-bool ifPKexists(string PK, string table) {
+bool ifPKexists(string PK, string table) {			//CHECKS IF THE PRIMARY KEY IS ALREADY IN TABLE TO AVOID ERRORS
 	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE pk = '" + PK + "'").c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 
@@ -438,7 +437,6 @@ bool ifPKexists(string PK, string table) {
 		getchar();
 		return 0;
 	}
-
 	int rows = PQntuples(res);
 	if (rows == 0) {
 		PQclear(res);
@@ -450,50 +448,56 @@ bool ifPKexists(string PK, string table) {
 		return 1;
 	}
 }
+void checkexec(PGresult *res, const char *function) {			//checks to make sure Postgresql command went through	
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		printf("could not execute command: %s\n", function);
+		PQfinish(dbconn);
+		getchar();
+	}
+	PQclear(res);
 
+}
 //-~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~_~_~_~_~__~_~_~_~_ 
 // START MAIN LOOP
 //_~_~_~_~_~_~__~_~_~_~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~
 
 int main()
 {
-	//database name that is to be created
-	//string newDB = "test3";
+	//connect to postgres given the const char conninfo as the destination
 	dbconn = PQconnectdb(conninfo);
 	if (PQstatus(dbconn) == CONNECTION_BAD) {
 		printf("Unable to connect to database\n");
-		Sleep(3000); //to read console
+		getchar(); // to read console
 	}
-	//DROP TABLE IF EXISTS results
-	//PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT, station_fk TEXT, cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, reals REAL[])");
-	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS testing(pk TEXT PRIMARY KEY, fail_bit INTEGER, reals REAL[])");
+	
+	// CREATE ALL NECESSARY TABLES IN SCHEMA (or overlook if already exists)
+	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS testing(pk SERIAL PRIMARY KEY, fail_bit INTEGER, reals REAL[])");
+	checkexec(res, "create testing table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS model(model_fk TEXT PRIMARY KEY, name TEXT)");
+	checkexec(res, "create model table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS part(part_fk TEXT PRIMARY KEY, serial TEXT, model_fk TEXT REFERENCES model(model_fk), start BOOL, finish BOOL)");
+	checkexec(res, "Create part table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS line(line_fk TEXT PRIMARY KEY, name TEXT)");
+	checkexec(res, "create line table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS station(station_fk TEXT PRIMARY KEY, name TEXT, line_fk TEXT REFERENCES line(line_fk), final BOOL)");
+	checkexec(res, "create station table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT REFERENCES part(part_fk), station_fk TEXT REFERENCES station(station_fk), cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, real REAL[])");
+	checkexec(res, "create results table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_names(pk TEXT PRIMARY KEY, station_fk TEXT REFERENCES station(station_fk), status_bit TEXT[], real TEXT[], real_unit TEXT[])");
+	checkexec(res, "create results names table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_limits(pk TEXT PRIMARY KEY, station_fk TEXT REFERENCES station(station_fk), real_max REAL[], real_min REAL[])");
+	checkexec(res, "create results limits table");
 
-	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		printf("could not create table");
-		PQfinish(dbconn);
-		getchar();
-		return 0;
-	}
-
-	PQclear(res);
-/*
-	res = PQexec(dbconn, ("INSERT INTO results VALUES('t2','2','text', 2, 300, 4000, ARRAY " + reals + ")").c_str());
-	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		printf("could not add values");
-		PQfinish(dbconn);
-		getchar();
-		return 0;
-	}
-	PQclear(res);*/
 	//end database area
 
-	readXML("TEST_XML.xml");
+	//readxml reads through given xml file and adjusts script state according to plc type and model - also assigns tags and types to read
+	readXML("TEST_XML.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
 
 	switch (state) {
 	default:
 	{
-		cout << "No Recognized PLC Models found in XML document";
-		if (!ifPKexists("test21", "testing")) { printf("yeet"); }
+		cout << "No Recognized PLC Models found in XML document \n";
+		if (ifPKexists("test21", "testing")) { printf("yeet"); }		//just testing fuction... to be taken out later
 		getchar();
 		break;
 	}
@@ -519,16 +523,13 @@ int main()
 			return 0;
 		}
 		string newstr;
-
+		//this is where you might update tags depending on what you want to do
 		///* we are done */
 		getchar();
 		destroyRockTags();
-
 		printf("Press any key to exit");
-
 		PQfinish(dbconn);
 		getchar();
-
 		return 0;
 	}
 	case SIEMENS300:
@@ -544,35 +545,46 @@ int main()
 			int x;
 			float f;
 			string str;
-			byte data[280];
+			byte data[500];
 			int offset = 0;
+			int bitTracker = 0;
+			bool secondbyte = FALSE;
 			//current datablock set to DB1
-			int sres = Cli_DBRead(Client, 1, 0, 280, &data);
+			int sres = Cli_DBRead(Client, 1, 0, 286, &data);
 			if (Check(sres, "datablock read")) {
 				for (int i = 0; i < tagTypes.size(); i++) {
 					cout << tagNames[i] << ": ";
-					readSiemensType(tagTypes[i], offset, data);
+					readSiemensType(tagTypes[i], offset, bitTracker, data);
 					cout << "\n";
 					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
 					//TEST WITH MULTIPLE BOOLS - other option is just to input offsets in the xml though....
-					offset += tagOffsets[i];
+					if (i != tagTypes.size()-1){
+						if (tagTypes[i] == "bool" && tagTypes[i + 1] == "bool") {
+							bitTracker += 1;
+							if (bitTracker == 8) {
+								if (secondbyte) {
+									secondbyte = FALSE;
+								}
+								else { secondbyte = TRUE; }
+								offset += 1;
+								bitTracker = 0;
+							}
+						}
+						else {
+							bitTracker = 0;
+							if (secondbyte) { offset += 1; }
+							else{ offset += tagOffsets[i]; }
+						}
+					}
+
+
 				}
 			}
-			//upload results to db
 
+			//upload results to db
 			string reals = floatsToString(real);
-			string strings;
-			cout << "input new PK";
-			cin >> strings;
-			getchar();
-			res = PQexec(dbconn, ("INSERT INTO testing VALUES('" + strings + "', 4000, ARRAY " + reals + ")").c_str());
-			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-				printf("could not add values");
-				PQfinish(dbconn);
-				getchar();
-				return 0;
-			}
-			PQclear(res);
+			res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
+			checkexec(res, "insert values into testing");
 			readDB();
 			cout << "exit?\n";
 			if (getchar() != 'n') {
@@ -614,20 +626,31 @@ int main()
 		{
 			int x;
 			float f;
-			//string str;
-			////print out initial values
-			byte data[264];
+			string str;
+			byte data[500];
 			int offset = 0;
+			int bitTracker = 0;
 			//current datablock set to DB1
-			int sres = Cli_DBRead(Client, 1, 0, 264, &data);
+			int sres = Cli_DBRead(Client, 1, 0, 280, &data);
 			if (Check(sres, "datablock read")) {
 				for (int i = 0; i < tagTypes.size(); i++) {
 					cout << tagNames[i] << ": ";
-					readSiemensType(tagTypes[i], offset, data);
+					readSiemensType(tagTypes[i], offset, bitTracker, data);
 					cout << "\n";
 					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
-					//THIS DEFINITELY NEED TO BE LOOKED AT BEFORE CONTINUING!!!!!
-					offset += tagOffsets[i];
+					//TEST WITH MULTIPLE BOOLS - other option is just to input offsets in the xml though....
+					if (tagTypes[i] == "bool" && tagTypes[i + 1] == "bool") {
+						bitTracker += 1;
+						if (bitTracker == 8) {
+							offset += 1;
+							bitTracker = 0;
+						}
+					}
+					else {
+						bitTracker = 0;
+						offset += tagOffsets[i];
+					}
+
 				}
 			}
 			cout << "exit?\n";
