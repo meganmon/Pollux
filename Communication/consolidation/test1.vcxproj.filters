@@ -16,6 +16,12 @@
     <ClCompile Include="backup.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Rockwell.cpp">
+      <Filter>Source\Tag Read</Filter>
+    </ClCompile>
+    <ClCompile Include="Siemens.cpp">
+      <Filter>Source\Tag Read</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\sol_threads.h">
@@ -42,6 +48,12 @@
     <ClInclude Include="libplctag\libplctag.h">
       <Filter>libplctag</Filter>
     </ClInclude>
+    <ClInclude Include="Siemens.h">
+      <Filter>Source\Tag Read</Filter>
+    </ClInclude>
+    <ClInclude Include="Rockwell.h">
+      <Filter>Source\Tag Read</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source">
@@ -55,6 +67,9 @@
     </Filter>
     <Filter Include="libplctag">
       <UniqueIdentifier>{6b55c7d1-31a7-45a3-ad5e-8e76b8db1150}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Tag Read">
+      <UniqueIdentifier>{be952944-c646-4ee7-b5bc-65c51496ce3b}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

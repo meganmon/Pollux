@@ -1,0 +1,64 @@
+<?xml version="1.0" ?>
+<ROOT>
+	<PLCs>
+		<PLC Type="siemens" Model="300" IPAddress="10.0.0.9" numberOfStations="1">
+		</PLC>
+	</PLCs>
+	<DATABLOCK dataBlock="2" name="Load" station="1">
+		<DATA Type="string" name="Data_0" array="0">
+		</DATA>
+		<DATA Type="string" name="Data_1" array="0">
+		</DATA>
+		<DATA Type="Dint" name="ErrorCode" array="0">
+		</DATA>
+		<DATA Type="string" name="ErrorMsg" array="0">
+		</DATA>
+		<DATA Type="Dint" name="Transaction" array="0">
+		</DATA>
+		<DATA Type="Dint" name="Cycle_Pk" array="0">
+		</DATA>
+	</DATABLOCK>
+	<DATABLOCK dataBlock="3" name="Unload" station="1">
+		<DATA Type="bool" name="result" array="70">
+		</DATA>
+		<DATA Type="bool" name="statusBits" array="32">
+		</DATA>
+		<DATA Type="bool" name="failureBits" array="32">
+		</DATA>
+		<DATA Type="Dint" name="checkSum" array="0">
+		</DATA>
+		<DATA Type="Dint" name="ErrorCode" array="0">
+		</DATA>
+		<DATA Type="string" name="ErrorMsg" array="0">
+		</DATA>
+		<DATA Type="Dint" name="Transaction" array="0">
+		</DATA>
+	</DATABLOCK>
+	<DATABLOCK dataBlock="4" name="COMM" station="1">
+		<DATA Type="bool" name="checkWork" array="0">
+		</DATA>
+		<DATA Type="bool" name="createPart" array="0">
+		</DATA>
+		<DATA Type="bool" name="loadSerialComp" array="0">
+		</DATA>
+		<DATA Type="bool" name="startUnload" array="0">
+		</DATA>
+		<DATA Type="bool" name="checkWork_OK" array="0">
+		</DATA>
+		<DATA Type="bool" name="checkWork_NOK" array="0">
+		</DATA>
+		<DATA Type="bool" name="createPart_OK" array="0">
+		</DATA>
+		<DATA Type="bool" name="createPart_NOK" array="0">
+		</DATA>
+		<DATA Type="bool" name="loadSerialComp_OK" array="0">
+		</DATA>
+		<DATA Type="bool" name="loadSerialComp_NOK" array="0">
+		</DATA>
+		<DATA Type="bool" name="unload_OK" array="0">
+		</DATA>
+		<DATA Type="bool" name="unload_NOK" array="0">
+		</DATA>
+	</DATABLOCK>
+
+</ROOT>

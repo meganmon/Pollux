@@ -1,3 +1,20 @@
+/*
+TO DO:
+MODEL_FK ???? HOW TO KNOW???
+AGG TABLE IN GENERAL
+station number vs station fk
+START AND FINISH - add part
+-~-~- DONE UNTIL QUESTIONS/TESTING-~-~-~
+results table -> improve after question (station fk is station number or what will I use as identifier?)
+createPart(); --> improve after questions (what is start finsih?), (will i search model for model fk? how to get name?)
+aggregateParts();  --> confused about how to do this one..... (just what? both Serials added to aggregate table?)
+check through commCheck
+-~~-~-~-~-~-~ CONTINUE -~-~-~-~-~-~-~-~
+Redo for Rockwell!!!
+
+*/
+
+
 #ifdef OS_WINDOWS
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
@@ -16,8 +33,12 @@
 #include <algorithm>
 #include "snap7/s7.h"
 #include "postgresql/libpq-fe.h"
+#include "Rockwell.h"
+#include "Siemens.h"
+#include <array>
 using namespace rapidxml;
 using namespace std;
+
 
 string Make;
 string Model;
@@ -27,8 +48,13 @@ string IP_address;
 #define ROCKWELL 1
 #define SIEMENS300 2
 #define SIEMENS1500 3
-#define ERROR 4
+#define ERRORS 4
 int state;
+
+
+S7Object Client;
+const char *Address;     // PLC IP Address
+int Rack, Slot; // Default Rack and Slot
 
 vector <string> tagTypes;
 vector <string> tagNames;
@@ -36,7 +62,16 @@ vector <int32_t> myTags;
 vector <string> tagSizes;
 vector <int> tagOffsets;
 vector <float> real;
-
+//vector <vector <bool> > commMatrix;
+vector <int> stationDBs;
+vector <int> loadDBs;
+vector <int> unloadDBs;
+vector <string> loadtags;
+vector <string> unloadtags;
+vector <string> stationtags;
+/*IS THERE ONLY ONE LOAD AND UNLOAD DB OR IS IT PER STATION*/
+size_t numStations;
+int resultSize;
 /*set up for Postgressql*/
 //the libraries and set up for the Postgresql
 PGconn *dbconn;
@@ -46,292 +81,7 @@ PGresult *res;
 const char *conninfo = "host=localhost port=5432 user=postgres password=Pollux123";
 /*end set up for Postgressql*/
 
-//-.-.-.-.-.-.-..--..-.-.-.-.-.-.-.-..-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-.-.-.-.-.-.-..-
 
-/*set up for SIEMENS SERVER*/
-S7Object Client;
-
-const char *Address;     // PLC IP Address
-int Rack, Slot; // Default Rack and Slot
-
-int ok = 0; // Number of test pass
-int ko = 0; // Number of test failure
-
-
-// Check error
-bool Check(int Result, const char * function)
-{
-	if (Result == 0) {
-		ok++;
-	}
-	else {
-		printf("| ERROR !!! \n");
-		if (Result < 0)
-			printf("| Library Error (-1)\n");
-		else
-			cout << "Error number: " << Result << "\n";
-		//		printf("| %s\n", Cli_ErrorText(Result).c_str());						//this function doesn't work, so just Google the error code 
-		printf("+-----------------------------------------------------\n");
-		ko++;
-	}
-	return Result == 0;
-}
-void ListBlocks()
-{
-	TS7BlocksList List;
-	int res = Cli_ListBlocks(Client,&List);
-	if (Check(res, "List Blocks in AG"))
-	{
-		printf("  OBCount  : %d\n", List.OBCount);
-		printf("  FBCount  : %d\n", List.FBCount);
-		printf("  FCCount  : %d\n", List.FCCount);
-		printf("  SFBCount : %d\n", List.SFBCount);
-		printf("  SFCCount : %d\n", List.SFCCount);
-		printf("  DBCount  : %d\n", List.DBCount);
-		printf("  SDBCount : %d\n", List.SDBCount);
-	};
-}
-void readSiemensType(string type, int offset, int Bit, byte data[]) {
-	if (type == "string") {
-		cout << S7_GetStringAt(data,offset) << "\n";
-	}	if (type == "int") {
-		cout << S7_GetIntAt(data, offset) << "\n";
-	}	if (type == "real" || type == "float") {
-		cout << S7_GetRealAt(data, offset) << "\n";
-		real.push_back(S7_GetRealAt(data, offset));
-	}	if (type == "dint") {
-		cout << S7_GetDIntAt(data, offset) << "\n";
-	}	if (type == "bool") {
-		cout << S7_GetBitAt(data, offset, Bit) << "\n";
-	}
-}
-
-//similar to get***At but also need to input value
-void writeIntAt(int db, int start, int value) {
-	byte data[2]; // for 16 bit integer
-	S7_SetUIntAt(data, 0, value);
-	int res = Cli_DBWrite(Client, db, start, 2, data);
-	if (Check(res, "writeIntAt")) {
-		cout << "integer value reassigned\n";
-	}
-}
-void writeRealAt(int db, int start, float value) {
-	byte data[4];
-	S7_SetRealAt(data, 0, value);
-	int res = Cli_DBWrite(Client, db, start, 4, data);
-	if (Check(res, "writeRealAt")) {
-		cout << "float value reassigned\n";
-	}
-}
-void writeStringAt(int db, int start, string value) {
-	byte data[256];
-	S7_SetStringAt(data, 0, 256, value);
-	int res = Cli_DBWrite(Client, db, start, 256, data);
-	if (Check(res, "writeStringAt")) {
-		cout << "string value reassigned\n";
-	}
-}
-void writeBoolAt(int db, int startbyte, int startbit, bool value) {
-	byte data[1];
-	cout << value << "\n";
-	S7_SetBitAt(data, 0, startbit, value);
-	int res = Cli_DBWrite(Client, db, startbyte, 1, data);
-	if (Check(res, "writeBoolAt")) {
-		cout << "boolean reassigned\n";
-	}
-
-}
-// Unit Connection
-bool CliConnect()
-{
-	int res = Cli_ConnectTo(Client, Address, Rack, Slot);
-	if (Check(res, "UNIT Connection")) {
-		printf("  Connected to   : %s (Rack=%d, Slot=%d)\n", Address, Rack, Slot);
-		//printf("  PDU Requested  : %d bytes\n", Client->PDURequest);
-		//printf("  PDU Negotiated : %d bytes\n", Client->PDULength);
-	};
-	return res == 0;
-}
-
-int assignTagOffset(string type) {
-	if (type == "string") {
-		return 256;
-	}	if (type == "real" || type == "float" || type == "dint") {
-		return 4;
-	}	if (type == "bool" || type == "int") {
-		return 2;
-	}
-
-}
-/*end set up for SIEMENS SERVER*/
-
-//-.-.-.-.-.-.-.--.-.-.-.--.-.--.-.-.-.-..-.-..-.-.-.-.-.-..-.--.-.-.-.-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-
-
-/*set up for ROCKWELL SERVER*/
-/* define tag paths*/
-
-/*define sizes*/
-#define BOOL_SIZE 1
-#define STRING_SIZE 88
-#define ELEM_SIZE 4
-#define INT_SIZE 4
-#define FLOAT_SIZE 4
-#define STRING_DATA_SIZE 82
-
-string assignTagSize(string type) {
-	if (type == "string") {
-		return "88";
-	}	if (type == "real" || type == "float" || type == "dint" || type == "int") {
-		return "4";
-	}	if (type == "bool") {
-		return "1";
-	}
-
-}
-/*define number of elements in arrays*/
-#define ELEM_COUNT 1  //assumes we are not reading an array
-#define DATA_TIMEOUT 5000
-
-/*shorter way to destroy all tags*/
-void destroyRockTags() {
-	for (int i = 0; i < tagNames.size(); i++) {
-		plc_tag_destroy(myTags[i]);
-	}
-}
-int32_t create_tagR(const char *path)
-{
-	int rc = PLCTAG_STATUS_OK;
-	int32_t tag = 0;
-	tag = plc_tag_create(path, DATA_TIMEOUT);
-	if (tag < 0) {
-		fprintf(stderr, "ERROR %s: Could not create tag!\n", plc_tag_decode_error(tag));
-		return tag;
-	}
-	if ((rc = plc_tag_status(tag)) != PLCTAG_STATUS_OK) {
-		fprintf(stdout, "Error setting up tag internal state.\n");
-		return rc;
-	}
-	return tag;
-}
-int read_intR(int32_t tag) {
-	int rc = plc_tag_read(tag, DATA_TIMEOUT);
-	if (rc != PLCTAG_STATUS_OK) {
-		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
-		plc_tag_destroy(tag);
-		return 0;
-	}
-	int i;
-	int out[ELEM_COUNT];
-	for (i = 0; i < ELEM_COUNT; i++) {
-		out[i] = plc_tag_get_int32(tag, (i*ELEM_SIZE));
-	}
-	return out[0];
-}
-float read_realR(int32_t tag) {
-	int rc = plc_tag_read(tag, DATA_TIMEOUT);
-	if (rc != PLCTAG_STATUS_OK) {
-		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
-		plc_tag_destroy(tag);
-		return 0;
-	}
-	int i;
-	float out[ELEM_COUNT];
-	for (i = 0; i < ELEM_COUNT; i++) {
-		out[i] = plc_tag_get_float32(tag, (i*ELEM_SIZE));
-	}
-	return out[0];
-}
-bool read_boolR(int32_t tag) {
-	int rc = plc_tag_read(tag, DATA_TIMEOUT);
-	if (rc != PLCTAG_STATUS_OK) {
-		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
-		plc_tag_destroy(tag);
-		return 0;
-	}
-	return plc_tag_get_uint8(tag, 0);
-}
-string read_stringR(int32_t tag) {
-	int rc = plc_tag_read(tag, DATA_TIMEOUT);
-	if (rc != PLCTAG_STATUS_OK) {
-		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
-		plc_tag_destroy(tag);
-		return "ERROR";
-	}
-	int i;
-	string strings[ELEM_COUNT];
-	for (i = 0; i < ELEM_COUNT; i++) {
-		int str_size = plc_tag_get_int32(tag, (i*STRING_SIZE));
-		char str[STRING_SIZE] = { 0 };
-		int j;
-		for (j = 0; j<str_size; j++) {
-			str[j] = (char)plc_tag_get_uint8(tag, (i*STRING_SIZE) + j + 4);
-		}
-		str[j] = (char)0;
-		string s(str);
-		strings[i] = s;
-	}
-	return strings[ELEM_COUNT - 1];
-}
-string readRockwellType(int32_t tag, string type) {
-	if (type == "string") {
-		return read_stringR(tag);
-	}
-	else {
-		if (type == "int" || type == "dint") {
-			return to_string(read_intR(tag));
-		}if (type == "real" || type == "float") {
-			return to_string(read_realR(tag));
-		}if (type == "bool") {
-			return to_string(read_boolR(tag));
-		}
-	}
-}
-void update_stringR(int32_t tag, int i, string STR)
-{
-	int str_len;
-	int base_offset = i * ELEM_SIZE;
-	int wait;
-	int str_index;
-	char *str = new char[STR.size() + 1];
-	strcpy(str, STR.c_str());
-	/* now write the data */
-	str_len = (int)strlen(str);
-	/* set the length */
-	plc_tag_set_int32(tag, base_offset, str_len);
-	/* copy the data */
-	for (str_index = 0; str_index < str_len && str_index < STRING_DATA_SIZE; str_index++) {
-		plc_tag_set_uint8(tag, base_offset + 4 + str_index, (uint8_t)str[str_index]);
-	}
-	/* pad with zeros */
-	for (; str_index<STRING_DATA_SIZE; str_index++) {
-		plc_tag_set_uint8(tag, base_offset + 4 + str_index, 0);
-	}
-	plc_tag_write(tag, DATA_TIMEOUT);
-}
-void update_floatR(int32_t tag, float f) {
-	int i;
-	for (i = 0; i < ELEM_COUNT; i++) {
-		float val = f;
-		plc_tag_set_float32(tag, (i*ELEM_SIZE), val);
-	}
-	plc_tag_write(tag, DATA_TIMEOUT);
-}
-void update_intR(int32_t tag, int x) {
-	int i;
-	for (i = 0; i < ELEM_COUNT; i++) {
-		int val = x;
-		plc_tag_set_int32(tag, (i*ELEM_SIZE), val);
-	}
-	plc_tag_write(tag, DATA_TIMEOUT);
-}
-void toggle_boolR(int32_t tag) {
-	bool b = read_boolR(tag);
-	if (b) { plc_tag_set_uint8(tag, 0, 0); }
-	else { plc_tag_set_uint8(tag, 0, 1); }
-	int rc = plc_tag_write(tag, DATA_TIMEOUT);
-}
-
-/*end set up for ROCKWELL SERVER*/
 //-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-.-.--.-..-.-.-.-.-.-.-.-.-..--.-.-.
 
 /*SET UP FOR MISCELLANEOUS FUNCTIONS*/
@@ -353,13 +103,25 @@ string floatsToString(vector <float> real) {		//converts float array to string f
 	}
 	return out;
 }
+double boolsToDouble(vector <bool> bools) {
+	int ret = 0;
+	int tmp;
+	int count = 32;
+	for (int i = 0; i < count; i++) {
+		tmp = bools[i];
+		ret |= tmp << (count - i - 1);
+	}
+	return ret;
+}
 
 void readXML(const char *file) {		//reads through XML document "file" to assign variables and tags to read, then assigns state according to PLC type
 	/*READ THE XML Doc*/
 	xml_document<> doc;
 	xml_node<> * root_node;
+	cout << file << "\n";
 	ifstream myfile(file); // open whatever file the data is in (should be reading from Communication folder)
 	if (myfile.fail()) {
+		cout << "to test";
 		printf("cannot find file");
 		getchar();
 		state = 4;
@@ -374,23 +136,66 @@ void readXML(const char *file) {		//reads through XML document "file" to assign 
 		xml_node<> * plcs_node = root_node->first_node("PLCs");
 		xml_node<> * plc_node = plcs_node->first_node("PLC");
 		Make = plc_node->first_attribute("Type")->value(); // assign the brand
-		Model = plc_node->first_attribute("Model")->value(); // assign the model (need to create a case for Rockwell if Model is not specified)
 		IP_address = plc_node->first_attribute("IPAddress")->value(); //assign the IP Address to use in gateway
+		numStations = stoi(plc_node->first_attribute("numberOfStations")->value());
 		 //make the make readable regardless of upper or lower case
 		transform(Make.begin(), Make.end(), Make.begin(), ::toupper);
 		string tempType;
-		for (xml_node<> * data_node = root_node->first_node("DATA"); data_node; data_node = data_node->next_sibling())
-		{
-			tempType = data_node->first_attribute("Type")->value();
-			transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
-			tagTypes.push_back(tempType);
-			tagNames.push_back(data_node->first_attribute("name")->value());
-			if (Make == "ROCKWELL") {
-				tagSizes.push_back(assignTagSize(tempType));
+		for (xml_node<> *datablock_node = root_node->first_node("DATABLOCK"); datablock_node; datablock_node= datablock_node->next_sibling()){
+			string dbname = datablock_node->first_attribute("name")->value();
+			transform(dbname.begin(), dbname.end(), dbname.begin(), ::tolower);
+			if (Make == "SIEMENS") {
+				if (dbname == "load") {
+					loadDBs.push_back(stoi(datablock_node->first_attribute("dataBlock")->value()));
+				}
+				else if (dbname == "unload") {
+					unloadDBs.push_back(stoi(datablock_node->first_attribute("dataBlock")->value()));
+					for (xml_node<> *data_node = datablock_node->first_node("DATA"); data_node; data_node = data_node->next_sibling()) {
+						string name = data_node->first_attribute("name")->value();
+						transform(name.begin(), name.end(), name.begin(), ::tolower);
+						if (name == "result") {
+							resultSize = stoi(data_node->first_attribute("array")->value());
+						}
+					}
+				}
+				else if (dbname == "comm") {
+					stationDBs.push_back(stoi(datablock_node->first_attribute("dataBlock")->value()));
+				}
 			}
-			else if (Make == "SIEMENS") {
-				tagOffsets.push_back(assignTagOffset(tempType));  
+			else if (Make == "ROCKWELL") {
+				if (dbname == "load") {
+					loadtags.push_back(datablock_node->first_attribute("tag")->value());
+				}
+				else if (dbname == "unload") {
+					unloadtags.push_back(datablock_node->first_attribute("tag")->value());
+					for (xml_node<> *data_node = datablock_node->first_node("DATA"); data_node; data_node = data_node->next_sibling()) {
+						string name = data_node->first_attribute("name")->value();
+						transform(name.begin(), name.end(), name.begin(), ::tolower);
+						if (name == "result") {
+							resultSize = stoi(data_node->first_attribute("array")->value());
+						}
+					}
+				}
+				else if (dbname == "comm") {
+					stationDBs.push_back(stoi(datablock_node->first_attribute("dataBlock")->value()));
+				}
 			}
+			//else {
+			//	for (xml_node<> * data_node = datablock_node->first_node("DATA"); data_node; data_node = data_node->next_sibling()) {
+			//		tempType = data_node->first_attribute("Type")->value();
+			//		transform(tempType.begin(), tempType.end(), tempType.begin(), ::tolower);
+			//		tagTypes.push_back(tempType);
+			//		tagNames.push_back(data_node->first_attribute("name")->value());
+			//		if (Make == "ROCKWELL") {
+			//			tagSizes.push_back(assignTagSize(tempType));
+			//		}
+			//		else if (Make == "SIEMENS") {
+			//			tagOffsets.push_back(assignTagOffset(tempType));
+			//		}
+			//	}
+			//}
+			/* THIS IS CURRENTLY SET UP FOR A STANDARD DATABLOCK, IF NOT GOING TO BE STANDARD, NEEDS TO ADAPT*/
+
 		}
 		if (Make == "ROCKWELL") {
 			cout << "Model recognized as Rockwell\n";
@@ -398,6 +203,7 @@ void readXML(const char *file) {		//reads through XML document "file" to assign 
 		}
 		if (Make == "SIEMENS") {
 			Client = Cli_Create(); // initialize the client connection
+			Model = plc_node->first_attribute("Model")->value(); // assign the model 
 			if (Model == "300") { // fill out for the different models that use this set up rather than the other one
 				state = 2;
 			}
@@ -427,8 +233,9 @@ void readDB() {
 	}
 	PQclear(res);
 }
-bool ifPKexists(string PK, string table) {			//CHECKS IF THE PRIMARY KEY IS ALREADY IN TABLE TO AVOID ERRORS
-	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE pk = '" + PK + "'").c_str());
+bool ifExists(string identifier, string column, string table) {			//CHECKS IF THE IDENTIFIER IS ALREADY IN TABLE
+	cout << ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str() << "\n";
+	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 
 		printf("No data retrieved\n");
@@ -440,7 +247,7 @@ bool ifPKexists(string PK, string table) {			//CHECKS IF THE PRIMARY KEY IS ALRE
 	int rows = PQntuples(res);
 	if (rows == 0) {
 		PQclear(res);
-		printf("not exists");
+		printf("Does not exists\n");
 		return 0;
 	}
 	else {
@@ -456,6 +263,303 @@ void checkexec(PGresult *res, const char *function) {			//checks to make sure Po
 	}
 	PQclear(res);
 
+}
+
+bool siemensStartUnload(int station, string part_fk, int cycle) {
+	byte buffer[342];
+	vector <float> reals;
+	vector <bool> status;
+	vector <bool> fail; 
+	bool out = true;
+	int offset = 0;
+	int bit = 0;
+	Cli_DBRead(Client, stationDBs[station], 0, 342, &buffer);
+	for (int i = 0; i < resultSize; i++) {
+		reals.push_back(S7_GetRealAt(buffer, offset));
+		offset += 4;
+	}
+	for (int i = 0; i < 32; i++) {
+		status.push_back(S7_GetBitAt(buffer, offset, bit));
+		bool hasfailed = S7_GetBitAt(buffer, offset + 4, bit);
+		if (hasfailed) { out = false; }
+		fail.push_back(hasfailed);
+		bit++;
+		cout << bit << "\n";
+		if (bit == 8) {
+			bit = 0;
+			offset += 1;
+		}
+	}
+
+	if (!out){
+		int errorCode = S7_GetDIntAt(buffer, 292); //ASSUMES: standard datablock position of error code double integer
+		string errorMessage = S7_GetStringAt(buffer, 296);	//ASUMES: standard datablock posiition of error Message string
+		cout << "error code: " << errorCode << "\n";
+		cout << "Error Message: " << errorMessage << "\n";
+
+	}
+	string Real = floatsToString(reals);
+	string fails = to_string(boolsToDouble(fail));
+	string statuses = to_string(boolsToDouble(status));
+	res = PQexec(dbconn, ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(station) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str());
+	checkexec(res, "insert values into results");
+	return out;
+}
+
+bool createPart(string Serial) {
+	bool out = true;
+	res = PQexec(dbconn, ("INSERT INTO part VALUES(DEFAULT, " + Serial + ", 1, 0, 0)").c_str());
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		printf("could not execute command: Create Part\n");
+		out = false;
+	}
+	return out;
+}
+void commCheck(int task, int station, int cycle) {
+	//: CHECK WORK
+	if (task == 1)
+	{
+		bool checkWork_NOK = FALSE;
+		bool checkWork_OK = FALSE;
+		byte string0[42];
+		Cli_DBRead(Client, loadDBs[station], 0, 42, &string0);	//reads from LOAD datablock to find Serial of part to check (should be first entry to data block)
+		string Serial = S7_GetStringAt(string0, 0);
+		if (ifExists(Serial, "serial", "part")) {  //check to see if Serial is in part table (i.e. part has been created)
+			//get part pk given Serial:
+			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
+			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+				printf("could not execute command: Find Serial in Part Table\n");
+				PQfinish(dbconn);
+				getchar();
+			}
+			string part_fk = PQgetvalue(res, 0, 0);
+			//Assumes check work is not being done on station 0 --- but should VERIFY that this is an accurate assumption
+			//check through past station to make sure no failure
+			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(station - 1) + "' AND part_fk = '" + part_fk + "'").c_str());
+			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+				printf("No data retrieved\n");
+				PQclear(res);
+				PQfinish(dbconn);
+				getchar();
+			}
+			int rows = PQntuples(res);
+			if (rows == 0) {
+				printf("Part does not exist in previous station\n");
+				checkWork_NOK = TRUE;
+			}
+			for (int i = 0; i<rows; i++) {
+				if (stoi(PQgetvalue(res, i, 5)) != 0) { // if a failbit is not zero
+					printf("part has failed on previous station with failbit %s\n", PQgetvalue(res, i, 5));
+					checkWork_NOK = TRUE;
+				}
+			}
+			if (!checkWork_NOK) {
+				checkWork_OK = TRUE;
+			}
+			PQclear(res);
+		}
+		else {
+			printf("part does not exist in system\n");
+			checkWork_NOK = TRUE;
+		}
+		byte checkWork[1];
+		Cli_DBRead(Client, stationDBs[station], 2, 1, &checkWork);
+		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
+		if (checkWork_NOK) {
+			S7_SetBitAt(checkWork, 0, 1, 1);		//0.5 is where CheckWork_NOK should be
+			printf("should set NOK to true\n");
+			Cli_DBWrite(Client, stationDBs[station], 2, 1, &checkWork);
+		}
+		else if (checkWork_OK) {
+			S7_SetBitAt(checkWork, 0, 0, 1);		// 0.4 is where CheckWork_OK should be
+			Cli_DBWrite(Client, stationDBs[station], 2, 1, &checkWork);
+		}
+		else {
+			printf("some path was missed in task 1 where neither were set to true\n");
+		}/*
+		byte check;
+		Cli_DBRead(Client, stationDBs[station], 2, 1, &check);
+		for (int i = 0; i < 8; i++) {
+			cout << S7_GetBitAt(&check, 0, i) << "\n";
+		}*/
+	}
+	// CREATE PART
+	if (task == 2) {
+		bool CreatePart_NOK = FALSE;
+		bool CreatePart_OK = TRUE;
+		//CHECK Part tbl if Serial
+		byte string0[42];
+		Cli_DBRead(Client, loadDBs[station], 0, 42, &string0);
+		string Serial = S7_GetStringAt(string0, 0);
+		if (ifExists(Serial, "serial", "part")) {
+			CreatePart_NOK = TRUE;
+			printf("part already exists in system");
+		}
+		// something about Checksum????
+		else {
+			if (createPart(Serial)){ CreatePart_OK = TRUE; }
+			else { CreatePart_NOK = TRUE; }
+		}
+		//
+
+		byte createPart;
+		Cli_DBRead(Client, stationDBs[station], 2, 1, &createPart);
+		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
+		if (CreatePart_NOK) {
+			S7_SetBitAt(&createPart, 0, 3, 1);		//0.5 is where createPart_NOK should be
+		}
+		else if (CreatePart_OK) {
+			S7_SetBitAt(&createPart, 0, 2, 1);		// 0.4 is where createPart_OK should be
+		}
+		else {
+			printf("some path was missed in task 2 where neither were set to true\n");
+		}
+		Cli_DBWrite(Client, stationDBs[station], 2, 1, &createPart);
+	}
+	// LOAD SERIAL COMP
+	if (task == 3) {	
+		//check both serials
+		//check both in aggregate
+		bool loadSerialComp_NOK = FALSE;
+		bool loadSerialComp_OK = FALSE;
+		byte string0[84];
+		Cli_DBRead(Client, loadDBs[station], 0, 84, &string0);
+		string Serial1 = S7_GetStringAt(string0, 0);
+		string Serial2 = S7_GetStringAt(string0, 42);
+		string part1_pk;
+		string part2_pk;
+		cout << "string1: " << Serial1 << "\n";
+		cout << "string2: " << Serial2 << "\n";
+		if (ifExists(Serial1, "serial", "part")) {
+			//set part1 pk from db
+			res = PQexec(dbconn, ("SELECT * FROM part WHERE serial=" + Serial1).c_str());
+			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+				printf("could not execute command: Find Serial1 in Part Table\n");
+				PQfinish(dbconn);
+				getchar();
+			}
+			part1_pk = PQgetvalue(res, 0, 0);
+			PQclear(res);
+			if (ifExists(Serial2, "serial", "part")) {
+				//set part2 pk from db
+				res = PQexec(dbconn, ("SELECT * FROM part WHERE serial=" + Serial2).c_str());
+				if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+					printf("could not execute command: Find Serial2 in Part Table\n");
+					PQfinish(dbconn);
+					getchar();
+				}
+				part2_pk = PQgetvalue(res, 0, 0);
+				PQclear(res);
+				if (ifExists(part1_pk, "aggregate_comp", "part_fk")) {
+					printf("Serial %s has already been aggregated", Serial1.c_str()); // add station # later
+					loadSerialComp_NOK = TRUE;
+				}
+				else {
+					if (ifExists(part2_pk, "aggreagate_comp", "part_fk")) {
+						printf("Serial %s has already been aggregated", Serial2.c_str());
+						loadSerialComp_NOK = TRUE;
+					}else {
+						loadSerialComp_OK = TRUE;
+					}
+				}
+			}
+			else {
+				printf("serial: %s does not exist in system", Serial2.c_str());
+				loadSerialComp_NOK = TRUE;
+			}
+		}
+		else { 
+			printf("serial: %s does not exist in system", Serial1.c_str()); 
+			loadSerialComp_NOK = TRUE;
+		}
+
+		byte buffer;
+		Cli_DBRead(Client, stationDBs[station], 2, 1, &buffer);
+		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
+		if (loadSerialComp_NOK) {
+			S7_SetBitAt(&buffer, 0, 5, 1);		//0.5 is where createPart_NOK should be
+		}
+		else if (loadSerialComp_OK) {
+			S7_SetBitAt(&buffer, 0, 4, 1);		// 0.4 is where createPart_OK should be
+			// aggregateComp(Serial1,Serial2,station, part1_pk, part2_pk);
+		}
+		else {
+			printf("some path was missed in task 3 where neither were set to true\n");
+		}
+		Cli_DBWrite(Client, stationDBs[station], 2, 1, &buffer);
+	} 
+	// START UNLOAD -- SAME RULES AS CHECKWorK ??? BUT WITH CHECKSUM TO BE IMPLEMENTED LATER
+
+	//DOES UNLOAD HAPPEN AFTER UNLOAD_OK IS SET, OR DO YOU SET, THEN CALL
+	if (task == 4) {
+		bool startUnload_NOK = FALSE;
+		bool startUnload_OK = FALSE;
+		byte string0[42];
+		string part_fk;
+		Cli_DBRead(Client, loadDBs[station], 0, 42, &string0);	//reads from LOAD datablock to find Serial of part to check (should be first entry to data block)
+		string Serial = S7_GetStringAt(string0, 0);
+		if (ifExists(Serial, "serial", "part")) {  //check to see if Serial is in part table (i.e. part has been created)
+												   //get part pk given Serial:
+			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
+			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+				printf("could not execute command: Find Serial in Part Table\n");
+				PQfinish(dbconn);
+				getchar();
+			}
+			part_fk = PQgetvalue(res, 0, 0);
+			//Assumes check work is not being done on station 0 --- but should VERIFY that this is an accurate assumption
+			//check through station to make sure no failure
+			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(station) + "' AND part_fk = '" + part_fk + "'").c_str());
+			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+				printf("No data retrieved\n");
+				PQclear(res);
+				PQfinish(dbconn);
+				getchar();
+			}
+			int rows = PQntuples(res);
+
+			//idk if this is used
+			if (rows == 0) {
+				printf("Part does not exist in station\n");
+				startUnload_NOK = TRUE;
+			}
+
+			for (int i = 0; i<rows; i++) {
+				if (stoi(PQgetvalue(res, i, 5)) != 0) { // if a failbit is not zero
+					printf("part has failed on station with failbit %s\n", PQgetvalue(res, i, 5));
+					startUnload_NOK = TRUE;
+				}
+			}
+			// ALSO SOMETHING ABOUT CHECKSUM????
+			if (!startUnload_NOK) {
+				if (siemensStartUnload(station, part_fk, cycle)) {
+					startUnload_OK = TRUE;
+				}
+				else { startUnload_NOK = TRUE; }
+			}
+			PQclear(res);
+		}
+		else {
+			printf("part does not exist in system\n");
+			startUnload_NOK = TRUE;
+		}
+		byte startUnload[1];
+		Cli_DBRead(Client, stationDBs[station], 2, 1, &startUnload);
+		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
+		if (startUnload_NOK) {
+			S7_SetBitAt(startUnload, 0, 7, 1);		//0.5 is where startUnload_NOK should be
+		}
+		else if (startUnload_OK) {
+			S7_SetBitAt(startUnload, 0, 6, 1);		// 0.4 is where startUnload_OK should be
+			//HOW TO DO CYCLE NUMBER???
+		//	siemensStartUnload(station, part_fk, cycle);
+		}
+		else {
+			printf("some path was missed in task 4 where neither were set to true\n");
+		}
+		Cli_DBWrite(Client, stationDBs[station], 2, 1, &startUnload);
+
+	}
 }
 //-~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~_~_~_~_~__~_~_~_~_ 
 // START MAIN LOOP
@@ -473,31 +577,33 @@ int main()
 	// CREATE ALL NECESSARY TABLES IN SCHEMA (or overlook if already exists)
 	PGresult *res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS testing(pk SERIAL PRIMARY KEY, fail_bit INTEGER, reals REAL[])");
 	checkexec(res, "create testing table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS model(model_fk TEXT PRIMARY KEY, name TEXT)");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS model(pk SERIAL PRIMARY KEY, name TEXT)");
 	checkexec(res, "create model table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS part(part_fk TEXT PRIMARY KEY, serial TEXT, model_fk TEXT REFERENCES model(model_fk), start BOOL, finish BOOL)");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS part(pk SERIAL PRIMARY KEY, serial TEXT, model_fk INT REFERENCES model(pk), start BOOL, finish BOOL)");
 	checkexec(res, "Create part table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS line(line_fk TEXT PRIMARY KEY, name TEXT)");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS line(pk SERIAL PRIMARY KEY, name TEXT)");
 	checkexec(res, "create line table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS station(station_fk TEXT PRIMARY KEY, name TEXT, line_fk TEXT REFERENCES line(line_fk), final BOOL)");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS station(pk SERIAL PRIMARY KEY, name TEXT, line_fk INT REFERENCES line(pk), final BOOL)");
 	checkexec(res, "create station table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk TEXT PRIMARY KEY, part_fk TEXT REFERENCES part(part_fk), station_fk TEXT REFERENCES station(station_fk), cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, real REAL[])");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results(pk SERIAL PRIMARY KEY, part_fk INT REFERENCES part(pk), station_fk INT REFERENCES station(pk), cycle_number INTEGER, status_bit INTEGER, fail_bit INTEGER, real REAL[])");
 	checkexec(res, "create results table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_names(pk TEXT PRIMARY KEY, station_fk TEXT REFERENCES station(station_fk), status_bit TEXT[], real TEXT[], real_unit TEXT[])");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_names(pk SERIAL PRIMARY KEY, station_fk INT REFERENCES station(pk), status_bit TEXT[], real TEXT[], real_unit TEXT[])");
 	checkexec(res, "create results names table");
-	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_limits(pk TEXT PRIMARY KEY, station_fk TEXT REFERENCES station(station_fk), real_max REAL[], real_min REAL[])");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS results_limits(pk SERIAL PRIMARY KEY, station_fk INT REFERENCES station(pk), real_max REAL[], real_min REAL[])");
 	checkexec(res, "create results limits table");
+	res = PQexec(dbconn, "CREATE TABLE IF NOT EXISTS aggregate_comp(pk SERIAL PRIMARY KEY, part_fk INT REFERENCES part(pk), serial_number TEXT, station_fk INT REFERENCES station(pk))");
+	checkexec(res, "create results aggregate_comp table");
 
 	//end database area
 
 	//readxml reads through given xml file and adjusts script state according to plc type and model - also assigns tags and types to read
-	readXML("TEST_XML.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
+	readXML("EXAMPLE.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
 
 	switch (state) {
 	default:
 	{
 		cout << "No Recognized PLC Models found in XML document \n";
-		if (ifPKexists("test21", "testing")) { printf("yeet"); }		//just testing fuction... to be taken out later
+		//if (ifPKexists("1", "testing")) { printf("yeet"); }		//just testing fuction... to be taken out later
 		getchar();
 		break;
 	}
@@ -541,23 +647,58 @@ int main()
 		cout << "Siemens 300" << "\n";
 		if (CliConnect())
 		{
-			ListBlocks();
 			int x;
 			float f;
 			string str;
-			byte data[500];
+			byte data;
 			int offset = 0;
 			int bitTracker = 0;
 			bool secondbyte = FALSE;
 			//current datablock set to DB1
-			int sres = Cli_DBRead(Client, 1, 0, 286, &data);
+			bool exit = FALSE;
+			int cycle = 0;
+			while(!exit){
+			//continuous read of COMM for all stations:
+				//create vector of 2 byte buffers to store data
+				array < byte, 20> buffer;
+				// Prepare struct
+				TS7DataItem Items[20];		//ASSUMES NUMBER OF STATIONS WILL BE NO MORE THAN 20, IF # STATIONS WILL BE MORE, THEN DO A SECOND MULTIREAD!
+
+				// NOTE : *AMOUNT IS NOT SIZE* , it's the number of items
+				for (int i=0; i<numStations;i++){
+					byte tempBuffer;
+					// datablock reads
+					Items[i].Area = S7AreaDB;
+					Items[i].WordLen = S7WLByte;
+					Items[i].DBNumber = stationDBs[i];        // ASSUMES DB STATIONS ARE IN ORDER ---- NEED TO BE IN ORDER ON THE XML
+					Items[i].Start = 0;        // Starting from 0
+					Items[i].Amount = 1;       // only need to real the 4 bools continuously
+					Items[i].pdata = &buffer[i];
+				}
+
+				int sres = Cli_ReadMultiVars(Client, &Items[0], numStations);
+				if (Check(sres, "datablock multiRead")) {
+					for (int i = 0; i < numStations; i++) {
+						for (int j = 0; j < 4; j++) {
+							bool task = S7_GetBitAt(&buffer[i], 0, j);
+							if (task) { commCheck(j+1, i, cycle); }
+						}
+					}
+				}
+				cout << "exit?\n";
+				if (getchar() != 'n') {
+					Cli_Disconnect(Client);
+					getchar();
+					exit = TRUE;
+				}
+				cycle++;
+			}				
+			/*int sres = Cli_DBRead(Client, 0, 0, 286, &data);
 			if (Check(sres, "datablock read")) {
 				for (int i = 0; i < tagTypes.size(); i++) {
 					cout << tagNames[i] << ": ";
 					readSiemensType(tagTypes[i], offset, bitTracker, data);
 					cout << "\n";
-					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
-					//TEST WITH MULTIPLE BOOLS - other option is just to input offsets in the xml though....
 					if (i != tagTypes.size()-1){
 						if (tagTypes[i] == "bool" && tagTypes[i + 1] == "bool") {
 							bitTracker += 1;
@@ -576,19 +717,17 @@ int main()
 							else{ offset += tagOffsets[i]; }
 						}
 					}
-
-
 				}
 			}
-
+*/
 			//upload results to db
 			string reals = floatsToString(real);
-			res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
-			checkexec(res, "insert values into testing");
+			//res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
+			//checkexec(res, "insert values into testing");
 			readDB();
 			cout << "exit?\n";
 			if (getchar() != 'n') {
-				Cli_Disconnect(Client);
+				//Cli_Disconnect(Client);
 				PQfinish(dbconn);
 				getchar();
 				return 0;
@@ -605,7 +744,7 @@ int main()
 			cin >> str;
 			writeStringAt(1, 2, str);
 			writeBoolAt(1, 258, 0, 1);
-			Cli_Disconnect(Client);
+		//	Cli_Disconnect(Client);
 			getchar();
 
 		}
@@ -617,63 +756,61 @@ int main()
 	}
 	case SIEMENS1500:
 	{
-		Address = IP_address.c_str();
-		//Address = "10.0.0.9";
-		Rack = 0;
-		Slot = 1;
-		cout << "Siemens 1500" << "\n";
-		if (CliConnect())
-		{
-			int x;
-			float f;
-			string str;
-			byte data[500];
-			int offset = 0;
-			int bitTracker = 0;
-			//current datablock set to DB1
-			int sres = Cli_DBRead(Client, 1, 0, 280, &data);
-			if (Check(sres, "datablock read")) {
-				for (int i = 0; i < tagTypes.size(); i++) {
-					cout << tagNames[i] << ": ";
-					readSiemensType(tagTypes[i], offset, bitTracker, data);
-					cout << "\n";
-					//might need to adjust this for when booleans follow each other (currently set that one boolean will take up 2 bytes, but if multiples booleans, will need to be adjusted):
-					//TEST WITH MULTIPLE BOOLS - other option is just to input offsets in the xml though....
-					if (tagTypes[i] == "bool" && tagTypes[i + 1] == "bool") {
-						bitTracker += 1;
-						if (bitTracker == 8) {
-							offset += 1;
-							bitTracker = 0;
-						}
-					}
-					else {
-						bitTracker = 0;
-						offset += tagOffsets[i];
-					}
+	//	Address = IP_address.c_str();
+	//	//Address = "10.0.0.9";
+	//	Rack = 0;
+	//	Slot = 1;
+	//	cout << "Siemens 1500" << "\n";
+	//	if (CliConnect())
+	//	{
+	//		int x;
+	//		float f;
+	//		string str;
+	//		byte data[500];
+	//		int offset = 0;
+	//		int bitTracker = 0;
+	//		//current datablock set to DB1
+	//		int sres = Cli_DBRead(Client, 1, 0, 280, &data);
+	//		if (Check(sres, "datablock read")) {
+	//			for (int i = 0; i < tagTypes.size(); i++) {
+	//				cout << tagNames[i] << ": ";
+	//				readSiemensType(tagTypes[i], offset, bitTracker, data);
+	//				cout << "\n";
+	//				if (tagTypes[i] == "bool" && tagTypes[i + 1] == "bool") {
+	//					bitTracker += 1;
+	//					if (bitTracker == 8) {
+	//						offset += 1;
+	//						bitTracker = 0;
+	//					}
+	//				}
+	//				else {
+	//					bitTracker = 0;
+	//					offset += tagOffsets[i];
+	//				}
 
-				}
-			}
-			cout << "exit?\n";
-			if (getchar() != 'n') {
-				Cli_Disconnect(Client);
-				getchar();
+	//			}
+	//		}
+	//		cout << "exit?\n";
+	//		if (getchar() != 'n') {
+	//			Cli_Disconnect(Client);
+	//			getchar();
 
-				PQfinish(dbconn);
-				return 0;
-			}
-			Cli_Disconnect(Client);
-			getchar();
-		}
-		cout << "press any key to EXIT";
-		getchar();
+	//			PQfinish(dbconn);
+	//			return 0;
+	//		}
+	//		Cli_Disconnect(Client);
+	//		getchar();
+	//	}
+	//	cout << "press any key to EXIT";
+	//	getchar();
 
-		PQfinish(dbconn);
+	//	PQfinish(dbconn);
 		return 0;
 	}
 	case ERROR:
 	{
 		// no current use for this, but set up in case of running into additional errors
-		cout << "Error";
+		cout << "Error?";
 		getchar();
 
 		PQfinish(dbconn);

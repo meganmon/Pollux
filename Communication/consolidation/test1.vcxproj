@@ -319,11 +319,15 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="snap7\s7.cpp" />
     <ClCompile Include="snap7\snap7.cpp" />
+    <ClCompile Include="Rockwell.cpp" />
+    <ClCompile Include="Siemens.cpp" />
     <ClCompile Include="utils_windows.c" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\sol_threads.h" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\unix_threads.h" />
     <ClInclude Include="..\Documents\snap7-full-1.4.2\snap7-full-1.4.2\src\sys\win_threads.h" />
+    <ClInclude Include="Siemens.h" />
     <ClInclude Include="libplctag\libplctag.h" />
+    <ClInclude Include="Rockwell.h" />
     <ClInclude Include="snap7\s7.h" />
     <ClInclude Include="snap7\snap7.h" />
     <ClInclude Include="snap7\snap_platform.h" />
