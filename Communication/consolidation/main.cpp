@@ -1,9 +1,13 @@
 /*
+MONDAY:
+message Gian or Jonas to go over progress and address create part, station fk, and aggregate parts questions -> then go over how it will work for Rockwell
+	-confirm that current method of predetermined datablock will work (otherwise ~1/2-1 more day of work)
 TO DO:
-MODEL_FK ???? HOW TO KNOW???
+- MODEL FK -> given only serial, how do we know model foreign key, or is name also serial number? 
 AGG TABLE IN GENERAL
-station number vs station fk
-START AND FINISH - add part
+station number vs station fk -> will these correspond or no?
+START AND FINISH - add part -> what do these do/ what even are the data types? How do I know what to set them to
+
 -~-~- DONE UNTIL QUESTIONS/TESTING-~-~-~
 results table -> improve after question (station fk is station number or what will I use as identifier?)
 createPart(); --> improve after questions (what is start finsih?), (will i search model for model fk? how to get name?)
@@ -19,7 +23,6 @@ Redo for Rockwell!!!
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 #endif
-//if includes are rearranged, solution will not compile
 #include <WinSock2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,7 +65,7 @@ vector <int32_t> myTags;
 vector <string> tagSizes;
 vector <int> tagOffsets;
 vector <float> real;
-//vector <vector <bool> > commMatrix;
+vector <int> stations;
 vector <int> stationDBs;
 vector <int> loadDBs;
 vector <int> unloadDBs;
@@ -103,7 +106,7 @@ string floatsToString(vector <float> real) {		//converts float array to string f
 	}
 	return out;
 }
-double boolsToDouble(vector <bool> bools) {
+long int boolsToInt(vector <bool> bools) {
 	int ret = 0;
 	int tmp;
 	int count = 32;
@@ -160,6 +163,7 @@ void readXML(const char *file) {		//reads through XML document "file" to assign 
 				}
 				else if (dbname == "comm") {
 					stationDBs.push_back(stoi(datablock_node->first_attribute("dataBlock")->value()));
+					stations.push_back(stoi(datablock_node->first_attribute("station")->value()));
 				}
 			}
 			else if (Make == "ROCKWELL") {
@@ -216,10 +220,8 @@ void readXML(const char *file) {		//reads through XML document "file" to assign 
 void readDB() {
 	res = PQexec(dbconn, "SELECT * FROM testing");
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-
 		printf("No data retrieved\n");
 		PQclear(res);
-		PQfinish(dbconn);
 		getchar();
 	}
 	int rows = PQntuples(res);
@@ -237,17 +239,14 @@ bool ifExists(string identifier, string column, string table) {			//CHECKS IF TH
 	cout << ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str() << "\n";
 	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-
 		printf("No data retrieved\n");
 		PQclear(res);
-		PQfinish(dbconn);
-		getchar();
 		return 0;
 	}
 	int rows = PQntuples(res);
 	if (rows == 0) {
 		PQclear(res);
-		printf("Does not exists\n");
+		printf("Does not exist\n");
 		return 0;
 	}
 	else {
@@ -258,7 +257,6 @@ bool ifExists(string identifier, string column, string table) {			//CHECKS IF TH
 void checkexec(PGresult *res, const char *function) {			//checks to make sure Postgresql command went through	
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		printf("could not execute command: %s\n", function);
-		PQfinish(dbconn);
 		getchar();
 	}
 	PQclear(res);
@@ -273,24 +271,27 @@ bool siemensStartUnload(int station, string part_fk, int cycle) {
 	bool out = true;
 	int offset = 0;
 	int bit = 0;
-	Cli_DBRead(Client, stationDBs[station], 0, 342, &buffer);
+	//read datablock
+	Cli_DBRead(Client, unloadDBs[station], 0, 342, &buffer);
+	//go through the array of reals
 	for (int i = 0; i < resultSize; i++) {
 		reals.push_back(S7_GetRealAt(buffer, offset));
 		offset += 4;
 	}
+	//read the 32 bit array of bools for fail bits and status bits
 	for (int i = 0; i < 32; i++) {
+
 		status.push_back(S7_GetBitAt(buffer, offset, bit));
 		bool hasfailed = S7_GetBitAt(buffer, offset + 4, bit);
-		if (hasfailed) { out = false; }
+		if (hasfailed) { out = false; }		// if one of the failbits is equal to 1 (something has gone wrong)
 		fail.push_back(hasfailed);
 		bit++;
-		cout << bit << "\n";
 		if (bit == 8) {
 			bit = 0;
 			offset += 1;
 		}
 	}
-
+	//if some thing has gone wrong, print out the error code
 	if (!out){
 		int errorCode = S7_GetDIntAt(buffer, 292); //ASSUMES: standard datablock position of error code double integer
 		string errorMessage = S7_GetStringAt(buffer, 296);	//ASUMES: standard datablock posiition of error Message string
@@ -298,27 +299,41 @@ bool siemensStartUnload(int station, string part_fk, int cycle) {
 		cout << "Error Message: " << errorMessage << "\n";
 
 	}
+	//add the information to the results table
 	string Real = floatsToString(reals);
-	string fails = to_string(boolsToDouble(fail));
-	string statuses = to_string(boolsToDouble(status));
-	res = PQexec(dbconn, ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(station) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str());
+	string fails = to_string(boolsToInt(fail));
+	string statuses = to_string(boolsToInt(status));
+	cout << ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(stations[station]) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str() << "\n";		//stations in this code are indexed at zero, but in postgres indexed at 1, so add one to statoin number when inputing
+	res = PQexec(dbconn, ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(stations[station]) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str());
 	checkexec(res, "insert values into results");
 	return out;
 }
+void aggregateComp(string Serial1,string Serial2,int station,string part1_fk,string part2_fk) {
+	res = PQexec(dbconn, ("INSERT INTO aggregate_comp VALUES(DEFAULT, " + part1_fk + ", '" + Serial1 + "', " + to_string(stations[station]) + ")").c_str());
+	checkexec(res, "aggregate Serial 1");
+	res = PQexec(dbconn, ("INSERT INTO aggregate_comp VALUES(DEFAULT, " + part2_fk + ", '" + Serial2 + "', " + to_string(stations[station]) + ")").c_str());
+	checkexec(res, "aggregate Serial 2");
+
+}
 
 bool createPart(string Serial) {
+	//add part to database, if something goes wrong, return false
 	bool out = true;
-	res = PQexec(dbconn, ("INSERT INTO part VALUES(DEFAULT, " + Serial + ", 1, 0, 0)").c_str());
+	printf(("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', 1, FALSE, FALSE)\n").c_str());
+	res = PQexec(dbconn, ("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', 1, FALSE, FALSE)").c_str());
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		printf("could not execute command: Create Part\n");
 		out = false;
 	}
 	return out;
 }
-void commCheck(int task, int station, int cycle) {
-	//: CHECK WORK
-	if (task == 1)
+void commCheck(int task, int station, int cycle) {		// takes in task 0:3, station, and cycle #(?), to run through check work, create part, load serial comp, or start unload
+	//CHECK WORK:
+	if (task == 1) 
 	{
+		cout << "check work\n";
+		cout << "Station: " << stations[station] << "\n";
+		//adds nothing to database, only checks for existence, then function at previous station (assumes that will not be called at station 0?)
 		bool checkWork_NOK = FALSE;
 		bool checkWork_OK = FALSE;
 		byte string0[42];
@@ -329,17 +344,14 @@ void commCheck(int task, int station, int cycle) {
 			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
 			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 				printf("could not execute command: Find Serial in Part Table\n");
-				PQfinish(dbconn);
-				getchar();
 			}
 			string part_fk = PQgetvalue(res, 0, 0);
 			//Assumes check work is not being done on station 0 --- but should VERIFY that this is an accurate assumption
 			//check through past station to make sure no failure
-			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(station - 1) + "' AND part_fk = '" + part_fk + "'").c_str());
+			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]-1) + "' AND part_fk = '" + part_fk + "'").c_str()); 
 			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 				printf("No data retrieved\n");
 				PQclear(res);
-				PQfinish(dbconn);
 				getchar();
 			}
 			int rows = PQntuples(res);
@@ -354,6 +366,7 @@ void commCheck(int task, int station, int cycle) {
 				}
 			}
 			if (!checkWork_NOK) {
+				printf("Check Work OK\n");
 				checkWork_OK = TRUE;
 			}
 			PQclear(res);
@@ -362,6 +375,8 @@ void commCheck(int task, int station, int cycle) {
 			printf("part does not exist in system\n");
 			checkWork_NOK = TRUE;
 		}
+
+		//set necessary COMM bit to TRUE
 		byte checkWork[1];
 		Cli_DBRead(Client, stationDBs[station], 2, 1, &checkWork);
 		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
@@ -385,23 +400,25 @@ void commCheck(int task, int station, int cycle) {
 	}
 	// CREATE PART
 	if (task == 2) {
+		cout << "create part\n";
 		bool CreatePart_NOK = FALSE;
 		bool CreatePart_OK = TRUE;
 		//CHECK Part tbl if Serial
 		byte string0[42];
 		Cli_DBRead(Client, loadDBs[station], 0, 42, &string0);
 		string Serial = S7_GetStringAt(string0, 0);
+		//check if part serial is already in database
 		if (ifExists(Serial, "serial", "part")) {
 			CreatePart_NOK = TRUE;
-			printf("part already exists in system");
+			printf("part already exists in system\n");
 		}
 		// something about Checksum????
 		else {
 			if (createPart(Serial)){ CreatePart_OK = TRUE; }
 			else { CreatePart_NOK = TRUE; }
 		}
-		//
 
+		//set necessary COMM bit to TRUE
 		byte createPart;
 		Cli_DBRead(Client, stationDBs[station], 2, 1, &createPart);
 		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
@@ -417,7 +434,8 @@ void commCheck(int task, int station, int cycle) {
 		Cli_DBWrite(Client, stationDBs[station], 2, 1, &createPart);
 	}
 	// LOAD SERIAL COMP
-	if (task == 3) {	
+	if (task == 3) {	 
+		cout << "load serial comp\n";
 		//check both serials
 		//check both in aggregate
 		bool loadSerialComp_NOK = FALSE;
@@ -432,31 +450,27 @@ void commCheck(int task, int station, int cycle) {
 		cout << "string2: " << Serial2 << "\n";
 		if (ifExists(Serial1, "serial", "part")) {
 			//set part1 pk from db
-			res = PQexec(dbconn, ("SELECT * FROM part WHERE serial=" + Serial1).c_str());
+			res = PQexec(dbconn, ("SELECT * FROM part WHERE serial='" + Serial1 + "'").c_str());
 			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 				printf("could not execute command: Find Serial1 in Part Table\n");
-				PQfinish(dbconn);
-				getchar();
 			}
-			part1_pk = PQgetvalue(res, 0, 0);
+			part1_pk = PQgetvalue(res, 0, 0); 
 			PQclear(res);
 			if (ifExists(Serial2, "serial", "part")) {
 				//set part2 pk from db
-				res = PQexec(dbconn, ("SELECT * FROM part WHERE serial=" + Serial2).c_str());
+				res = PQexec(dbconn, ("SELECT * FROM part WHERE serial='" + Serial2 + "'").c_str());
 				if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 					printf("could not execute command: Find Serial2 in Part Table\n");
-					PQfinish(dbconn);
-					getchar();
 				}
-				part2_pk = PQgetvalue(res, 0, 0);
+				part2_pk = PQgetvalue(res, 0, 0); 
 				PQclear(res);
-				if (ifExists(part1_pk, "aggregate_comp", "part_fk")) {
-					printf("Serial %s has already been aggregated", Serial1.c_str()); // add station # later
+				if (ifExists(part1_pk, "part_fk", "aggregate_comp")) {
+					printf("Serial %s has already been aggregated \n", Serial1.c_str()); // add station # later
 					loadSerialComp_NOK = TRUE;
 				}
 				else {
-					if (ifExists(part2_pk, "aggreagate_comp", "part_fk")) {
-						printf("Serial %s has already been aggregated", Serial2.c_str());
+					if (ifExists(part2_pk, "part_fk", "aggregate_comp")) {
+						printf("Serial %s has already been aggregated\n", Serial2.c_str());
 						loadSerialComp_NOK = TRUE;
 					}else {
 						loadSerialComp_OK = TRUE;
@@ -473,6 +487,7 @@ void commCheck(int task, int station, int cycle) {
 			loadSerialComp_NOK = TRUE;
 		}
 
+		//set necessary COMM bit to TRUE
 		byte buffer;
 		Cli_DBRead(Client, stationDBs[station], 2, 1, &buffer);
 		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
@@ -481,17 +496,17 @@ void commCheck(int task, int station, int cycle) {
 		}
 		else if (loadSerialComp_OK) {
 			S7_SetBitAt(&buffer, 0, 4, 1);		// 0.4 is where createPart_OK should be
-			// aggregateComp(Serial1,Serial2,station, part1_pk, part2_pk);
+			aggregateComp(Serial1,Serial2,station, part1_pk, part2_pk);
 		}
 		else {
 			printf("some path was missed in task 3 where neither were set to true\n");
 		}
 		Cli_DBWrite(Client, stationDBs[station], 2, 1, &buffer);
 	} 
-	// START UNLOAD -- SAME RULES AS CHECKWorK ??? BUT WITH CHECKSUM TO BE IMPLEMENTED LATER
 
-	//DOES UNLOAD HAPPEN AFTER UNLOAD_OK IS SET, OR DO YOU SET, THEN CALL
+	// START UNLOAD -- SAME RULES AS CHECKWorK ??? BUT WITH CHECKSUM TO BE IMPLEMENTED LATER
 	if (task == 4) {
+		cout << "start unload\n";
 		bool startUnload_NOK = FALSE;
 		bool startUnload_OK = FALSE;
 		byte string0[42];
@@ -499,54 +514,55 @@ void commCheck(int task, int station, int cycle) {
 		Cli_DBRead(Client, loadDBs[station], 0, 42, &string0);	//reads from LOAD datablock to find Serial of part to check (should be first entry to data block)
 		string Serial = S7_GetStringAt(string0, 0);
 		if (ifExists(Serial, "serial", "part")) {  //check to see if Serial is in part table (i.e. part has been created)
-												   //get part pk given Serial:
-			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
+			//									   //get part pk given Serial:
+			cout << ("SELECT * from part where serial = '" + Serial + "'").c_str() << "\n";
+			res = PQexec(dbconn, ("SELECT * FROM part"));
 			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 				printf("could not execute command: Find Serial in Part Table\n");
-				PQfinish(dbconn);
-				getchar();
+				//getchar();
 			}
-			part_fk = PQgetvalue(res, 0, 0);
-			//Assumes check work is not being done on station 0 --- but should VERIFY that this is an accurate assumption
-			//check through station to make sure no failure
-			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(station) + "' AND part_fk = '" + part_fk + "'").c_str());
+			part_fk = PQgetvalue(res, 1, 0);
+			cout << part_fk << "\n";
+			//check through current station database to make sure no failure (THIS IS DIFFERENT THAN CHECK WORK, SO VERIFY!)
+			cout << ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str() << "\n";
+			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str());
 			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 				printf("No data retrieved\n");
 				PQclear(res);
-				PQfinish(dbconn);
 				getchar();
 			}
 			int rows = PQntuples(res);
 
-			//idk if this is used
-			if (rows == 0) {
-				printf("Part does not exist in station\n");
-				startUnload_NOK = TRUE;
-			}
-
-			for (int i = 0; i<rows; i++) {
-				if (stoi(PQgetvalue(res, i, 5)) != 0) { // if a failbit is not zero
-					printf("part has failed on station with failbit %s\n", PQgetvalue(res, i, 5));
-					startUnload_NOK = TRUE;
+			//check to see if part has input data in the past, if yes: check is part has failed in past
+			if (rows != 0) {
+				for (int i = 0; i<rows; i++) {
+					if (stoi(PQgetvalue(res, i, 5)) != 0) { // if a failbit is not zero
+						printf("part has failed on station with failbit %s\n", PQgetvalue(res, i, 5));
+						startUnload_NOK = TRUE;
+					}
 				}
 			}
+
 			// ALSO SOMETHING ABOUT CHECKSUM????
-			if (!startUnload_NOK) {
-				if (siemensStartUnload(station, part_fk, cycle)) {
+			
+			if (!startUnload_NOK) { // if startUnload_NOK has not been set to False, then should be good to read unload and upload
+				if (siemensStartUnload(station, part_fk, cycle)) {	//runs through the unload datablock and checks for failure (returns false if there is a failbit = 1) and uploads to database
 					startUnload_OK = TRUE;
 				}
 				else { startUnload_NOK = TRUE; }
 			}
-			PQclear(res);
 		}
 		else {
 			printf("part does not exist in system\n");
 			startUnload_NOK = TRUE;
 		}
+
+		//now set the COMM bit of startUnload_(N)OK to TRUE
 		byte startUnload[1];
 		Cli_DBRead(Client, stationDBs[station], 2, 1, &startUnload);
 		//THIS IS WHERE MORE WORK CAN BE DONE TO READ OFF OF XML AND SET POSITION RATHER THAN HARDCODING
 		if (startUnload_NOK) {
+			printf("setting NOK \n");
 			S7_SetBitAt(startUnload, 0, 7, 1);		//0.5 is where startUnload_NOK should be
 		}
 		else if (startUnload_OK) {
@@ -687,10 +703,11 @@ int main()
 				}
 				cout << "exit?\n";
 				if (getchar() != 'n') {
+					cout << "exiting\n";
 					Cli_Disconnect(Client);
-					getchar();
 					exit = TRUE;
 				}
+				getchar();
 				cycle++;
 			}				
 			/*int sres = Cli_DBRead(Client, 0, 0, 286, &data);
