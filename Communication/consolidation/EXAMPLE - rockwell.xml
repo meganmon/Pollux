@@ -1,0 +1,64 @@
+<?xml version="1.0" ?>
+<ROOT>
+	<PLCs>
+		<PLC Type="rockwell" IPAddress="10.0.0.1" numberOfStations="1">
+		</PLC>
+	</PLCs>
+	<DATABLOCK name="Load" station="1">
+		<DATA type="string" name="Data_0" array="1">
+		</DATA>
+		<DATA type="string" name="Data_1" array="1">
+		</DATA>
+		<DATA type="Dint" name="ErrorCode" array="1">
+		</DATA>
+		<DATA type="string" name="ErrorMsg" array="1">
+		</DATA>
+		<DATA type="Dint" name="Transaction" array="1">
+		</DATA>
+		<DATA type="Dint" name="Cycle_Pk" array="1">
+		</DATA>
+	</DATABLOCK>
+	<DATABLOCK name="Unload" station="1">
+		<DATA type="bool" name="result" array="70">
+		</DATA>
+		<DATA type="bool" name="statusBits" array="32">
+		</DATA>
+		<DATA type="bool" name="failureBits" array="32">
+		</DATA>
+		<DATA type="Dint" name="checkSum" array="1">
+		</DATA>
+		<DATA type="Dint" name="ErrorCode" array="1">
+		</DATA>
+		<DATA type="string" name="ErrorMsg" array="1">
+		</DATA>
+		<DATA type="Dint" name="Transaction" array="1">
+		</DATA>
+	</DATABLOCK>
+	<DATABLOCK name="COMM" station="1">
+		<DATA type="bool" name="checkWork" array="1">
+		</DATA>
+		<DATA type="bool" name="createPart" array="1">
+		</DATA>
+		<DATA type="bool" name="loadSerialComp" array="1">
+		</DATA>
+		<DATA type="bool" name="startUnload" array="1">
+		</DATA>
+		<DATA type="bool" name="checkWork_OK" array="1">
+		</DATA>
+		<DATA type="bool" name="checkWork_NOK" array="1">
+		</DATA>
+		<DATA type="bool" name="createPart_OK" array="1">
+		</DATA>
+		<DATA type="bool" name="createPart_NOK" array="1">
+		</DATA>
+		<DATA type="bool" name="loadSerialComp_OK" array="1">
+		</DATA>
+		<DATA type="bool" name="loadSerialComp_NOK" array="1">
+		</DATA>
+		<DATA type="bool" name="unload_OK" array="1">
+		</DATA>
+		<DATA type="bool" name="unload_NOK" array="1">
+		</DATA>
+	</DATABLOCK>
+
+</ROOT>

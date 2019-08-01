@@ -34,13 +34,14 @@ extern vector <int32_t> myTags;
 string assignTagSize(string type);
 int32_t create_tagR(const char *path);
 int read_intR(int32_t tag);
-float read_realR(int32_t tag);
+vector <float> read_realR(int32_t tag, int elem_count);
 bool read_boolR(int32_t tag);
-string read_stringR(int32_t tag);
-string readRockwellType(int32_t tag, string type);
+string read_stringR(int32_t tag);/*
+string readRockwellType(int32_t tag, string type);*/
 void update_stringR(int32_t tag, int i, string STR);
 void update_floatR(int32_t tag, float f);
 void update_intR(int32_t tag, int x);
-void toggle_boolR(int32_t tag);
+void toggle_boolR(int32_t tag, int val);
 void destroyRockTags();
+vector <bool> readBoolArray(int32_t tag, int elem_count);
 

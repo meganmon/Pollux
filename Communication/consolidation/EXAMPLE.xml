@@ -34,7 +34,7 @@
 		<DATA Type="Dint" name="Transaction" array="0">
 		</DATA>
 	</DATABLOCK>
-	<DATABLOCK dataBlock="4" name="COMM" station="2">
+	<DATABLOCK dataBlock="4" name="COMM" station="3">
 		<DATA Type="bool" name="checkWork" array="0">
 		</DATA>
 		<DATA Type="bool" name="createPart" array="0">

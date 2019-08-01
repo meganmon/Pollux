@@ -40,19 +40,19 @@ int read_intR(int32_t tag) {
 	}
 	return out[0];
 }
-float read_realR(int32_t tag) {
+vector <float> read_realR(int32_t tag, int elem_count) {
+	vector <float> out;
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
 	if (rc != PLCTAG_STATUS_OK) {
 		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
 		plc_tag_destroy(tag);
-		return 0;
+		return out;
 	}
 	int i;
-	float out[ELEM_COUNT];
-	for (i = 0; i < ELEM_COUNT; i++) {
-		out[i] = plc_tag_get_float32(tag, (i*ELEM_SIZE));
+	for (i = 0; i < elem_count; i++) {
+		out.push_back(plc_tag_get_float32(tag, (i*ELEM_SIZE)));
 	}
-	return out[0];
+	return out;
 }
 bool read_boolR(int32_t tag) {
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
@@ -62,6 +62,19 @@ bool read_boolR(int32_t tag) {
 		return 0;
 	}
 	return plc_tag_get_uint8(tag, 0);
+}
+vector <bool> readBoolArray(int32_t tag, int elem_count) {
+	vector <bool> out;
+	int rc = plc_tag_read(tag, DATA_TIMEOUT);
+	if (rc != PLCTAG_STATUS_OK) {
+		fprintf(stderr, "ERROR: Unable to read the data! Got error code %d: %s\n", rc, plc_tag_decode_error(rc));
+		plc_tag_destroy(tag);
+		return out;
+	}
+	for (int i = 0; i < elem_count; i++) {
+		out.push_back(plc_tag_get_uint8(tag, i));
+	}
+	return out;
 }
 string read_stringR(int32_t tag) {
 	int rc = plc_tag_read(tag, DATA_TIMEOUT);
@@ -84,7 +97,7 @@ string read_stringR(int32_t tag) {
 		strings[i] = s;
 	}
 	return strings[ELEM_COUNT - 1];
-}
+}/*
 string readRockwellType(int32_t tag, string type) {
 	if (type == "string") {
 		return read_stringR(tag);
@@ -93,12 +106,12 @@ string readRockwellType(int32_t tag, string type) {
 		if (type == "int" || type == "dint") {
 			return to_string(read_intR(tag));
 		}if (type == "real" || type == "float") {
-			return to_string(read_realR(tag));
+			return to_string(read_realR(tag)[0]);
 		}if (type == "bool") {
 			return to_string(read_boolR(tag));
 		}
 	}
-}
+}*/
 void update_stringR(int32_t tag, int i, string STR)
 {
 	int str_len;
@@ -137,10 +150,9 @@ void update_intR(int32_t tag, int x) {
 	}
 	plc_tag_write(tag, DATA_TIMEOUT);
 }
-void toggle_boolR(int32_t tag) {
-	bool b = read_boolR(tag);
-	if (b) { plc_tag_set_uint8(tag, 0, 0); }
-	else { plc_tag_set_uint8(tag, 0, 1); }
+void toggle_boolR(int32_t tag, int val) {
+	//see if will be array of just set to read individually?
+	plc_tag_set_uint8(tag, 0, val); 
 	int rc = plc_tag_write(tag, DATA_TIMEOUT);
 }
 
