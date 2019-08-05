@@ -9,6 +9,8 @@
 		</DATA>
 		<DATA type="string" name="Data_1" array="1">
 		</DATA>
+		<DATA type="string" name="Model" array="1">
+		</DATA>
 		<DATA type="Dint" name="ErrorCode" array="1">
 		</DATA>
 		<DATA type="string" name="ErrorMsg" array="1">

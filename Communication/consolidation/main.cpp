@@ -2,17 +2,20 @@
 What is done:
 
 TO DO:
-- MODEL FK -> given only serial, how do we know model foreign key, or is name also serial number? 
-station number vs station fk -> will these correspond or no?
+station number vs station fk -> current assumption is that station number will also be the foreign/primary key
 IF start is now(), what is finish?
 
 
+Major Questions:
+Do I reset the values of the acc bools everytime, or assume that the other side will reset them after they have been read?
+
 -~-~- DONE UNTIL QUESTIONS/TESTING-~-~-~
-results table -> improve after question (station fk is station number or what will I use as identifier?)
-createPart(); --> improve after questions (what is finish?), (will i search model for model fk? how to get name? -> to be answered by Gian)
-Redo for Rockwell - need to test and ensure correct set up
+results table -> improve after question (current assumption is station number = station fk)
+createPart(); --> improve after questions (what is finish?)
+
 -~~-~-~-~-~-~ CONTINUE -~-~-~-~-~-~-~-~
 rockwell set up and testing
+fix read to not need buffer variable for last string
 */
 
 
@@ -68,20 +71,20 @@ Both use numStations to know how many datablocks to read
 both use resultSize to allow the Real results to be an adjustable size
 */
 //this set can probably be gottten rid of
-vector <string> tagTypes;
 vector <string> tagNames;
 vector <int32_t> myTags;
-vector <string> tagSizes;
-vector <int> tagOffsets;
 //end of set that could be deleted (probably)
+
 vector <float> real;		//stores results from results in Unload datablock
 vector <int> stations;		//stores the station #'s (in case not starting from 0)
 size_t numStations;			//number of total stations
 int resultSize;				//number of reals in results variable in unload datablock
+
 //Siemens only
 vector <int> stationDBs;		//stores offsets for COMM variables
 vector <int> loadDBs;			//stores offsets for Load datablock variables
 vector <int> unloadDBs;			//stores offsets for Unload datablock variables
+
 //Rockwell only
 vector <string> loadNames;		//data names for load data -> to be aggregated with station number to make tag name
 vector <string> unloadNames;	//data names for unload data
@@ -111,7 +114,8 @@ const char *conninfo = "host=localhost port=5432 user=postgres password=Pollux12
 
 /*SET UP FOR MISCELLANEOUS FUNCTIONS*/
 
-string floatsToString(vector <float> real) {		//converts float array to string for uploading to DB
+//converts float array to string for uploading to DB
+string floatsToString(vector <float> real) {		
 	string out;
 	int max_size = real.size();
 	for (int i = 0; i < max_size; i++) {
@@ -128,7 +132,9 @@ string floatsToString(vector <float> real) {		//converts float array to string f
 	}
 	return out;
 }
-long int boolsToInt(vector <bool> bools) {			// for converting status and failure bits to dint to upload to database
+
+// for converting status and failure bits to dint to upload to database
+long int boolsToInt(vector <bool> bools) {			
 	int ret = 0;
 	int tmp;
 	int count = 32;
@@ -139,7 +145,8 @@ long int boolsToInt(vector <bool> bools) {			// for converting status and failur
 	return ret;
 }
 
-void readXML(const char *file) {		//reads through XML document "file" to assign variables and tags to read, then assigns state according to PLC type
+//reads through XML document "file" to assign variables and tags to read, then assigns state according to PLC type
+void readXML(const char *file) {		
 	/*READ THE XML Doc*/
 	xml_document<> doc;
 	xml_node<> * root_node;
@@ -239,16 +246,22 @@ void readXML(const char *file) {		//reads through XML document "file" to assign 
 			Client = Cli_Create(); // initialize the client connection
 			Model = plc_node->first_attribute("Model")->value(); // assign the model 
 			if (Model == "300") { // fill out for the different models that use this set up rather than the other one
+				Rack = 0;
+				Slot = 2;
 				state = 2;
 			}
 			else {
-				state = 3;
+				Rack = 0;
+				Slot = 1;
+				state = 2;
 			}
 		}
 	}
 }
-void readDB() {		//no longer a super necessary function, but can be change to take in const char of any table
-	res = PQexec(dbconn, "SELECT * FROM testing");
+
+//no longer a super necessary function, but still nice to have
+void readDB(string table) {		
+	res = PQexec(dbconn, ("SELECT * FROM " + table).c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		printf("No data retrieved\n");
 		PQclear(res);
@@ -265,18 +278,20 @@ void readDB() {		//no longer a super necessary function, but can be change to ta
 	}
 	PQclear(res);
 }
-bool ifExists(string identifier, string column, string table) {			//CHECKS IF THE IDENTIFIER IS ALREADY IN GIVEN TABLE
-	cout << ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str() << "\n";
+
+//CHECKS IF THE IDENTIFIER IS ALREADY IN GIVEN TABLE
+bool ifExists(string identifier, string column, string table) {			
+	//cout << ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str() << "\n";
 	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-		printf("No data retrieved\n");
+		//printf("No data retrieved\n");
 		PQclear(res);
 		return 0;
 	}
 	int rows = PQntuples(res);
 	if (rows == 0) {
 		PQclear(res);
-		printf("Does not exist\n");
+	//	printf("Does not exist\n");
 		return 0;
 	}
 	else {
@@ -284,7 +299,9 @@ bool ifExists(string identifier, string column, string table) {			//CHECKS IF TH
 		return 1;
 	}
 }
-void checkexec(PGresult *res, const char *function) {			//checks to make sure Postgresql command went through	 -- it clears result after checking, so do not use if trying to read data from the result after calling
+
+//checks to execution of Postgresql command	 -- it clears result after checking, so do not use if trying to read data from the result after calling
+void checkexec(PGresult *res, const char *function) {			
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
 		printf("could not execute command: %s\n", function);
 		getchar();
@@ -292,7 +309,9 @@ void checkexec(PGresult *res, const char *function) {			//checks to make sure Po
 	PQclear(res);
 
 }
-bool rockwellUnload(int station, string part_fk, int cycle) {		//reads unload block of Rockwell, looks for fail bits; if no failure, returns true; all results, status bits, and fail bits are uploaded to database regardless of failures
+
+//reads unload block of Rockwell, looks for fail bits; if no failure, returns true; all results, status bits, and fail bits are uploaded to database regardless of failures
+bool rockwellUnload(int station, string part_fk, int cycle) {		
 	vector <float> reals;
 	vector <bool> status;
 	vector <bool> fail;
@@ -326,7 +345,9 @@ bool rockwellUnload(int station, string part_fk, int cycle) {		//reads unload bl
 	checkexec(res, "insert values into results");
 	return out;
 }
-bool siemensStartUnload(int station, string part_fk, int cycle) {		//reads unload block of Siemens, looks for fail bits; if no failure, returns true; all results, status bits, and fail bits are uploaded to database regardless of failures
+
+//reads unload block of Siemens, looks for fail bits; if no failure, returns true; all results, status bits, and fail bits are uploaded to database regardless of failures
+bool siemensStartUnload(int station, string part_fk, int cycle) {		
 	byte buffer[342];
 	vector <float> reals;
 	vector <bool> status;
@@ -366,39 +387,60 @@ bool siemensStartUnload(int station, string part_fk, int cycle) {		//reads unloa
 	string Real = floatsToString(reals);
 	string fails = to_string(boolsToInt(fail));
 	string statuses = to_string(boolsToInt(status));
-	cout << ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(stations[station]) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str() << "\n";		//stations in this code are indexed at zero, but in postgres indexed at 1, so add one to statoin number when inputing
+//	cout << ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(stations[station]) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str() << "\n";		//stations in this code are indexed at zero, but in postgres indexed at 1, so add one to statoin number when inputing
 	res = PQexec(dbconn, ("INSERT INTO results VALUES(DEFAULT, " + part_fk + ", " + to_string(stations[station]) + ", " + to_string(cycle) + ", " + statuses + ", " + fails + ", ARRAY " + Real + ")").c_str());
 	checkexec(res, "insert values into results");
 	return out;
 }
-void aggregateComp(string Serial,int station,string part2_fk) {		//takes serial 1 and aggregates it to part2_fk (given by serial 2) in the aggregate_comp table
+
+//takes serial 1 and aggregates it to part2_fk (given by serial 2) in the aggregate_comp table
+void aggregateComp(string Serial,int station,string part2_fk) {		
 	res = PQexec(dbconn, ("INSERT INTO aggregate_comp VALUES(DEFAULT, " + part2_fk + ", '" + Serial + "', " + to_string(stations[station]) + ")").c_str());
 	checkexec(res, "aggregate Serial 1");
 
 }
 
-bool createPart(string Serial) {	//add part to database, if something goes wrong, return false
+//add part to database, if something goes wrong, return false
+bool createPart(string Serial, string modelName) {	
 	bool out = true;
-	printf(("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', 1, FALSE, FALSE)\n").c_str());
-	res = PQexec(dbconn, ("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', 1, NOW(), NOW())").c_str());			//*start and finish will probably have to be adjusted*  *model fk question still needs to be confirmed by Gian*
+	string model_fk;
+	res = PQexec(dbconn, ("SELECT * FROM model WHERE name='" + modelName + "'").c_str());
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-		printf("could not execute command: Create Part\n");
-		out = false;
+	//	printf("could not execute command: Find model_fk in Part Table\n");
 	}
+	if (PQntuples(res) != 0) {
+		model_fk = PQgetvalue(res, 0, 0);
+	//	cout << model_fk << "\n";
+		PQclear(res);
+		//printf(("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', " + model_fk + ", NOW(), NOW())\n").c_str());
+		res = PQexec(dbconn, ("INSERT INTO part VALUES(DEFAULT, '" + Serial + "', " + model_fk + ", NOW(), NOW())").c_str());			//*start and finish will probably have to be adjusted*  *model fk question still needs to be confirmed by Gian*
+		if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+			printf("could not execute command: Create Part\n");
+			out = false;
+		}
+	}
+	else { out = false; }
 	return out;
 }
 
-string Read(int station, int start = 0, int end = 0, int tagIndex = 0) {		//reads for Serial string in either rockwall or siemens, thakes in offset if second string for siemens (start and end for siemens, tagIndex for rockwell)
+//reads for Serial string in either rockwall or siemens, thakes in offset if second string for siemens (start and end for siemens, tagIndex for rockwell)
+string Read(int station, int start, int end, int tagIndex = 0) {		
 	if (Make == "ROCKWELL") {
 		return read_stringR(loadtags[tagIndex]);
 	}
 	else if (Make == "SIEMENS") {
-		byte string0[42];
+		byte string0[126];
+		string out;
+	//	cout << "reading db: " << loadDBs[station] << " start: " << start << "\n";
 		Cli_DBRead(Client, loadDBs[station], start,end, &string0);	//reads from LOAD datablock to find Serial of part to check
-		return S7_GetStringAt(string0, 0);
+		out = S7_GetStringAt(string0, 0);
+	//	cout << out << "\n";
+		return out;
 	}
 }
-void setBit(int station, int pos, int bit = 0, int tagIndex = 0) {		//sets COMM boolean at given position (pos and bit to be used for Siemens, tagIndex for rockwell)
+
+//sets COMM boolean at given position (pos and bit to be used for Siemens, tagIndex for rockwell)
+void setBit(int station, int pos, int bit = 0, int tagIndex = 0) {		
 	if (Make == "SIEMENS") {
 		byte checkWork[1];
 		Cli_DBRead(Client, stationDBs[station], pos, 1, &checkWork);
@@ -411,20 +453,20 @@ void setBit(int station, int pos, int bit = 0, int tagIndex = 0) {		//sets COMM 
 	}
 }
 void commCheck(int task, int station, int cycle) {		// takes in task 1:4, station, and cycle #, to run through check work, create part, load serial comp, or start unload
-	//CHECK WORK:
+	//CHECK WORK:	- add in the status bit part
 	if (task == 1) 
 	{
-		cout << "check work\n";
-		cout << "Station: " << stations[station] << "\n";
+		cout << "check work on station " << stations[station] <<"\n";
+	//	cout << "Station: " << stations[station] << "\n";
 		//adds nothing to database, only checks for existence, then function at previous station (assumes that will not be called at station 0?)
 		bool checkWork_NOK = FALSE;
 		bool checkWork_OK = FALSE;
-		string Serial = Read(station, 0, 42, station*6);		//(for rockwell -> comm has 6 variables, so every 6 tags will be Serial 1) 
+		string Serial = Read(station, 0, 42, station*7);		//(for rockwell -> load has 7 variables, so every 7 tags will be Serial 1) 
 		if (ifExists(Serial, "serial", "part")) {  //check to see if Serial is in part table (i.e. part has been created)
 			//get part pk given Serial:
 			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
 			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-				printf("could not execute command: Find Serial in Part Table\n");
+			//	printf("could not execute command: Find Serial in Part Table\n");
 			}
 			string part_fk = PQgetvalue(res, 0, 0);
 			//Assumes check work is not being done on station 0 --- but should VERIFY that this is an accurate assumption
@@ -433,7 +475,7 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 				printf("No data retrieved\n");
 				PQclear(res);
-				getchar();
+			//	getchar();
 			}
 			int rows = PQntuples(res);
 			if (rows == 0) {
@@ -473,11 +515,13 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 	}
 	// CREATE PART
 	if (task == 2) {
-		cout << "create part\n";
+		cout << "create part on station " << stations[station] << "\n";
 		bool CreatePart_NOK = FALSE;
 		bool CreatePart_OK = TRUE;
 		//CHECK Part tbl if Serial
-		string Serial = Read(station, 0, 42,station*6);
+		string modelName = Read(station, 84, 126);
+		//cout << "Model name: " << modelName << "	Serial: ";
+		string Serial = Read(station, 0, 42,station*7);
 		//check if part serial is already in database
 		if (ifExists(Serial, "serial", "part")) {
 			CreatePart_NOK = TRUE;
@@ -485,10 +529,9 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 		}
 		// something about Checksum????
 		else {
-			if (createPart(Serial)){ CreatePart_OK = TRUE; }
+			if (createPart(Serial, modelName)){ CreatePart_OK = TRUE; }
 			else { CreatePart_NOK = TRUE; }
 		}
-
 		//set necessary COMM bit to TRUE
 		if (CreatePart_NOK) {
 			printf("createPart_NOK = true\n");
@@ -505,23 +548,23 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 	// LOAD SERIAL COMP
 	//checks if part 1 serial has been aggregated to part 2 table, then aggregates if not
 	if (task == 3) {	 
-		cout << "load serial comp\n";
+		cout << "load serial comp on station " << stations[station] << "\n";
 		//check both serials
 		//check both in aggregate
 		bool loadSerialComp_NOK = FALSE;
 		bool loadSerialComp_OK = FALSE;
-		string Serial1 = Read(station, 0, 42, station * 6); //CHECK THE 0,41 and 42,84!!!!!!!!!
-		string Serial2 = Read(station, 42, 84, station * 6 + 1);
+		string Serial1 = Read(station, 0, 42, station * 7); //CHECK THE 0,41 and 42,84!!!!!!!!!
+		string Serial2 = Read(station, 42, 84, station * 7 + 1);
 		string part1_pk;
 		string part2_pk;
-		cout << "string1: " << Serial1 << "\n";
-		cout << "string2: " << Serial2 << "\n";
+		//cout << "string1: " << Serial1 << "\n";
+		//cout << "string2: " << Serial2 << "\n";
 		if (ifExists(Serial1, "serial", "part")) {
 			if (ifExists(Serial2, "serial", "part")) {
 				//set part2 pk from db
 				res = PQexec(dbconn, ("SELECT * FROM part WHERE serial='" + Serial2 + "'").c_str());
 				if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-					printf("could not execute command: Find Serial2 in Part Table\n");
+					//printf("could not execute command: Find Serial2 in Part Table\n");
 				}
 				part2_pk = PQgetvalue(res, 0, 0); 
 				PQclear(res);
@@ -558,29 +601,29 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 		}
 	} 
 
-	// START UNLOAD -- SAME RULES AS CHECKWorK ??? BUT WITH CHECKSUM TO BE IMPLEMENTED LATER
+	// START UNLOAD -- SAME RULES AS CHECKWorK ??? BUT WITH CHECKSUM TO BE IMPLEMENTED LATER -- add in the status bit part
 	if (task == 4) {
-		cout << "start unload\n";
+		cout << "start unload on station " << stations[station] << "\n";
 		bool startUnload_NOK = FALSE;
 		bool startUnload_OK = FALSE;
 		string part_fk;	//reads from LOAD datablock to find Serial of part to check (should be first entry to data block)
-		string Serial = Read(station,0,42,station*6);
+		string Serial = Read(station,0,42,station*7);
 		if (ifExists(Serial, "serial", "part")) {  //check to see if Serial is in part table (i.e. part has been created)
 			//									   //get part pk given Serial:
 			res = PQexec(dbconn, ("SELECT * from part where serial = '" + Serial + "'").c_str());
 			if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-				printf("could not execute command: Find Serial in Part Table\n");
+			//	printf("could not execute command: Find Serial in Part Table\n");
 				//getchar();
 			}
 			part_fk = PQgetvalue(res, 0, 0);
-			cout << part_fk << "\n";
+			//cout << part_fk << "\n";
 			//check through current station database to make sure no failure (THIS IS DIFFERENT THAN CHECK WORK, SO VERIFY!)
-			cout << ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str() << "\n";
+			//cout << ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str() << "\n";
 			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str());
 			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-				printf("No data retrieved\n");
+				//printf("No data retrieved\n");
 				PQclear(res);
-				getchar();
+			//	getchar();
 			}
 			int rows = PQntuples(res);
 
@@ -632,10 +675,10 @@ void commCheck(int task, int station, int cycle) {		// takes in task 1:4, statio
 
 	}
 }
+
 //-~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~_~_~_~_~__~_~_~_~_ 
 // START MAIN LOOP
 //_~_~_~_~_~_~__~_~_~_~_~_~_~_~__~_~_~_~_~_~__~_~_~_~_~
-
 int main()
 {
 	//connect to postgres given the const char conninfo as the destination
@@ -668,7 +711,7 @@ int main()
 	//end database area
 
 	//readxml reads through given xml file and adjusts script state according to plc type and model - also assigns tags and types to read
-	readXML("EXAMPLE - rockwell.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
+	readXML("EXAMPLE.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
 
 	switch (state) {
 	default:
@@ -692,7 +735,7 @@ int main()
 		//create tags:
 		for (int i = 0; i < numStations; i++) {
 			//create tags for loads 
-			for (int j = 0; j < 6; j++) {
+			for (int j = 0; j < 7; j++) {
 				loadtags.push_back(create_tagR(("protocol=ab_eip&gateway=" + IP_address + "&path=1,0&cpu=LGX&elem_size="+ assignTagSize(dataTypeLoad[j])+"&elem_count=1&name=" + loadNames[j] + "_" + to_string(stations[i])).c_str()));
 			}
 			//create tags for unloads
@@ -744,11 +787,8 @@ int main()
 	{
 		Address = IP_address.c_str();
 //		Address = "10.0.0.9";
-		Rack = 0;
-		Slot = 2;
 		cout << "Siemens 300" << "\n";
-		if (CliConnect())
-		{
+		if (CliConnect()){
 			bool exit = FALSE;
 			int cycle = 0;
 			while(!exit){
@@ -769,7 +809,6 @@ int main()
 					Items[i].Amount = 1;       // only need to real the 4 bools continuously
 					Items[i].pdata = &buffer[i];
 				}
-
 				int sres = Cli_ReadMultiVars(Client, &Items[0], numStations);
 				if (Check(sres, "datablock multiRead")) {
 					for (int i = 0; i < numStations; i++) {
@@ -787,82 +826,12 @@ int main()
 				}
 				getchar();
 				cycle++;
-			}				
-	
+			}		
 			//upload results to db
 			string reals = floatsToString(real);
 			//res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
 			//checkexec(res, "insert values into testing");
-			readDB();
-			cout << "exit?\n";
-			if (getchar() != 'n') {
-				//Cli_Disconnect(Client);
-				PQfinish(dbconn);
-				getchar();
-				return 0;
-			}
-
-		}
-		cout << "press any key to EXIT";
-		getchar();
-
-		PQfinish(dbconn);
-		return 0;
-	}
-	case SIEMENS1500:
-	{
-		Address = IP_address.c_str();
-		//Address = "10.0.0.9";
-		Rack = 0;
-		Slot = 1;
-		cout << "Siemens 1500" << "\n";
-		if (CliConnect())
-		{
-			bool exit = FALSE;
-			int cycle = 0;
-			while (!exit) {
-				//continuous read of COMM for all stations:
-				//create vector of 2 byte buffers to store data
-				array < byte, 20> buffer;
-				// Prepare struct
-				TS7DataItem Items[20];		//ASSUMES NUMBER OF STATIONS WILL BE NO MORE THAN 20, IF # STATIONS WILL BE MORE, THEN DO A SECOND MULTIREAD!
-
-											// NOTE : *AMOUNT IS NOT SIZE* , it's the number of items
-				for (int i = 0; i<numStations; i++) {
-					byte tempBuffer;
-					// datablock reads
-					Items[i].Area = S7AreaDB;
-					Items[i].WordLen = S7WLByte;
-					Items[i].DBNumber = stationDBs[i];        // ASSUMES DB STATIONS ARE IN ORDER ---- NEED TO BE IN ORDER ON THE XML
-					Items[i].Start = 0;        // Starting from 0
-					Items[i].Amount = 1;       // only need to real the 4 bools continuously
-					Items[i].pdata = &buffer[i];
-				}
-
-				int sres = Cli_ReadMultiVars(Client, &Items[0], numStations);
-				if (Check(sres, "datablock multiRead")) {
-					for (int i = 0; i < numStations; i++) {
-						for (int j = 0; j < 4; j++) {
-							bool task = S7_GetBitAt(&buffer[i], 0, j);
-							if (task) { commCheck(j + 1, i, cycle); }
-						}
-					}
-				}
-				cout << "exit?\n";
-				if (getchar() != 'n') {
-					cout << "exiting\n";
-					Cli_Disconnect(Client);
-					exit = TRUE;
-				}
-				getchar();
-				cycle++;
-			}
-
-			//upload results to db
-			string reals = floatsToString(real);
-			//res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
-			//checkexec(res, "insert values into testing");
-			readDB();
+			readDB("results");
 			cout << "exit?\n";
 			if (getchar() != 'n') {
 				//Cli_Disconnect(Client);
