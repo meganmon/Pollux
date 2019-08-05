@@ -16,6 +16,7 @@ createPart(); --> improve after questions (what is finish?)
 -~~-~-~-~-~-~ CONTINUE -~-~-~-~-~-~-~-~
 rockwell set up and testing
 fix read to not need buffer variable for last string
+add in the read of cycle rather than manual calc option
 */
 
 
@@ -131,6 +132,31 @@ string floatsToString(vector <float> real) {
 		}
 	}
 	return out;
+}
+
+//reads default database given a table and a key (but key is not necessary)
+void readDB(string table, string key = "*", string extras = "", int itemCount = 1) {		
+	res = PQexec(dbconn, ("SELECT " + key + " FROM " + table + extras).c_str());
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		printf("No data retrieved\n");
+		PQclear(res);
+		getchar();
+	}
+	int rows = PQntuples(res);
+	if (rows == 0) {
+		printf("not exists");
+	}
+	int items = itemCount;
+	for (int i = 0; i<rows; i++) {
+		for (int j = 0; j < items; j++) {
+			cout << PQgetvalue(res, i, j);
+			if (j != items - 1) {
+				cout << ", ";
+			}
+		}
+		cout << "\n";
+	}
+	PQclear(res);
 }
 
 // for converting status and failure bits to dint to upload to database
@@ -260,24 +286,6 @@ void readXML(const char *file) {
 }
 
 //no longer a super necessary function, but still nice to have
-void readDB(string table) {		
-	res = PQexec(dbconn, ("SELECT * FROM " + table).c_str());
-	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-		printf("No data retrieved\n");
-		PQclear(res);
-		getchar();
-	}
-	int rows = PQntuples(res);
-	if (rows == 0) {
-		printf("not exists");
-	}
-	for (int i = 0; i<rows; i++) {
-
-		printf("%s %s %s\n", PQgetvalue(res, i, 0),
-			PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
-	}
-	PQclear(res);
-}
 
 //CHECKS IF THE IDENTIFIER IS ALREADY IN GIVEN TABLE
 bool ifExists(string identifier, string column, string table) {			
@@ -791,14 +799,20 @@ int main()
 		if (CliConnect()){
 			bool exit = FALSE;
 			int cycle = 0;
+			cout << "Press ESC to exit\n";
 			while(!exit){
+				if (GetAsyncKeyState(VK_ESCAPE)) {
+					cout << "Exiting\n";
+					Cli_Disconnect(Client);
+					exit = true; 
+				}
 			//continuous read of COMM for all stations:
 				//create vector of 2 byte buffers to store data
 				array < byte, 20> buffer;
 				// Prepare struct
 				TS7DataItem Items[20];		//ASSUMES NUMBER OF STATIONS WILL BE NO MORE THAN 20, IF # STATIONS WILL BE MORE, THEN DO A SECOND MULTIREAD!
 
-				// NOTE : *AMOUNT IS NOT SIZE* , it's the number of items
+				//// NOTE : *AMOUNT IS NOT SIZE* , it's the number of items
 				for (int i=0; i<numStations;i++){
 					byte tempBuffer;
 					// datablock reads
@@ -818,21 +832,15 @@ int main()
 						}
 					}
 				}
-				cout << "exit?\n";
-				if (getchar() != 'n') {
-					cout << "exiting\n";
-					Cli_Disconnect(Client);
-					exit = TRUE;
-				}
-				getchar();
 				cycle++;
+				Sleep(2500);
 			}		
 			//upload results to db
 			string reals = floatsToString(real);
 			//res = PQexec(dbconn, ("INSERT INTO testing VALUES(DEFAULT, 4000, ARRAY " + reals + ")").c_str());
 			//checkexec(res, "insert values into testing");
-			readDB("results");
-			cout << "exit?\n";
+			readDB("results", "real", " ORDER BY PK DESC LIMIT 10",1);
+			cout << "Exit?\n";
 			if (getchar() != 'n') {
 				//Cli_Disconnect(Client);
 				PQfinish(dbconn);
