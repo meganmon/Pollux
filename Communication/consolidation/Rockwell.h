@@ -24,7 +24,7 @@ using namespace std;
 
 /*define number of elements in arrays*/
 #define ELEM_COUNT 1  //assumes we are not reading an array
-#define DATA_TIMEOUT 5000
+#define DATA_TIMEOUT 500
 
 
 extern vector <string> tagTypes;

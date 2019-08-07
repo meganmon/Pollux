@@ -4,7 +4,7 @@
 		<PLC Type="rockwell" IPAddress="10.0.0.1" numberOfStations="1">
 		</PLC>
 	</PLCs>
-	<DATABLOCK name="Load" station="1">
+	<DATABLOCK name="Load" station="1" tagend="station1">
 		<DATA type="string" name="Data_0" array="1">
 		</DATA>
 		<DATA type="string" name="Data_1" array="1">
@@ -20,7 +20,7 @@
 		<DATA type="Dint" name="Cycle_Pk" array="1">
 		</DATA>
 	</DATABLOCK>
-	<DATABLOCK name="Unload" station="1">
+	<DATABLOCK name="Unload" station="1" tagend="station1">
 		<DATA type="bool" name="result" array="70">
 		</DATA>
 		<DATA type="bool" name="statusBits" array="32">
@@ -36,14 +36,8 @@
 		<DATA type="Dint" name="Transaction" array="1">
 		</DATA>
 	</DATABLOCK>
-	<DATABLOCK name="COMM" station="1">
-		<DATA type="bool" name="checkWork" array="1">
-		</DATA>
-		<DATA type="bool" name="createPart" array="1">
-		</DATA>
-		<DATA type="bool" name="loadSerialComp" array="1">
-		</DATA>
-		<DATA type="bool" name="startUnload" array="1">
+	<DATABLOCK name="COMM" station="1" tagend="station1">
+		<DATA type="bool" name="allRead" array="4">
 		</DATA>
 		<DATA type="bool" name="checkWork_OK" array="1">
 		</DATA>
