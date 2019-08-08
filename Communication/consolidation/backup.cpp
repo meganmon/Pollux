@@ -64,7 +64,8 @@
 //				*/
 //				//this set can probably be gottten rid of
 //vector <string> tagNames;
-//vector <int32_t> myTags;
+//vector <int32_t> 
+;
 ////end of set that could be deleted (probably)
 //
 //vector <float> real;		//stores results from results in Unload datablock

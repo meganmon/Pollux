@@ -158,7 +158,16 @@ void toggle_boolR(int32_t tag, int val) {
 
 /*shorter way to destroy all tags*/
 void destroyRockTags() {
-	for (int i = 0; i < tagNames.size(); i++) {
-		plc_tag_destroy(myTags[i]);
+	int load = loadtags.size();
+	int unload = unloadtags.size();
+	int comm = commtags.size();
+	for (int i = 0; i < load; i++) {
+		plc_tag_destroy(loadtags[i]);
+	}
+	for (int i = 0; i < unload; i++) {
+		plc_tag_destroy(unloadtags[i]);
+	}
+	for (int i = 0; i < comm; i++) {
+		plc_tag_destroy(commtags[i]);
 	}
 }

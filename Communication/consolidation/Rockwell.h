@@ -28,8 +28,9 @@ using namespace std;
 
 
 extern vector <string> tagTypes;
-extern vector <string> tagNames;
-extern vector <int32_t> myTags;
+extern vector <int32_t> loadtags;
+extern vector <int32_t> unloadtags;
+extern vector <int32_t> commtags;
 
 string assignTagSize(string type);
 int32_t create_tagR(const char *path);

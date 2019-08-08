@@ -1,15 +1,14 @@
 /*
 TO DO:
-station number vs station fk -> current assumption is that station number will also be the foreign/primary key
+station number vs station fk -> current assumption is that station number will also be the foreign/primary key, but set up in place for other also
 
 Major Questions:
 Do I reset the values of the acc bools everytime, or assume that the other side will reset them after they have been read? *****
 
 -~~-~-~-~-~-~ CONTINUE -~-~-~-~-~-~-~-~
-rockwell set up and testing
+rockwell testing
 */
 
-//WEDNESDAY: ensure all is working and ready to present - comment everything and prepare to make it look good, present @ 4
 
 #ifdef OS_WINDOWS
 # define WIN32_LEAN_AND_MEAN
@@ -62,9 +61,7 @@ set up for Rockwell:
 Both use numStations to know how many datablocks to read
 both use resultSize to allow the Real results to be an adjustable size
 */
-//this set can probably be gottten rid of
-vector <string> tagNames;
-vector <int32_t> myTags;
+
 //end of set that could be deleted (probably)
 
 vector <float> real;		//stores results from results in Unload datablock
@@ -103,10 +100,7 @@ PGresult *res;
 const char *conninfo = "host=localhost port=5432 user=postgres password=Pollux123";
 /*end set up for Postgressql*/
 
-
-//-.-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-.-.-..-.-.-.-.-.-.-..-.-.-.-.-.-.--.-..-.-.-.-.-.-.-.-.-..--.-.-.
-
-/*SET UP FOR MISCELLANEOUS FUNCTIONS*/
+/*SET UP FOR miscellaneous functions*/
 
 //converts float array to string for uploading to DB
 string floatsToString(vector <float> real) {		
@@ -128,7 +122,7 @@ string floatsToString(vector <float> real) {
 }
 
 //reads default database given a table and a key (but key is not necessary)
-void readDB(string table, string key = "*", string extras = "", int itemCount = 1) {		
+void readDB(string table, int itemCount = 1, string key = "*", string extras = "") {
 	res = PQexec(dbconn, ("SELECT " + key + " FROM " + table + extras).c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		printf("No data retrieved\n");
@@ -643,7 +637,7 @@ void commCheck(int task, int station, int cycle) {
 			}
 			part_fk = PQgetvalue(res, 0, 0);
 			//cout << part_fk << "\n";
-			//check through current station database to make sure no failure (THIS IS DIFFERENT THAN CHECK WORK, SO VERIFY!)																 *! do we need to do this?
+			//check through current station database to make sure no failure													 *! do we need to do this?
 			//cout << ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str() << "\n";
 			res = PQexec(dbconn, ("SELECT * FROM results WHERE station_fk ='" + to_string(stations[station]) + "' AND part_fk = '" + part_fk + "'").c_str());
 			if (PQresultStatus(res) != PGRES_TUPLES_OK) {
@@ -740,7 +734,7 @@ int main()
 	//end database area
 
 	//readxml reads through given xml file and adjusts script state according to plc type and model - also assigns tags and types to read
-	readXML("EXAMPLE - rockwell.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
+	readXML("EXAMPLE.xml");				// PUT NAME OF XML TO BE READ HERE, can also be an input variable at the top of the script too i guess....
 
 	switch (state) {
 	default:
@@ -854,7 +848,7 @@ int main()
 			}		
 			//read results form db
 			string reals = floatsToString(real);
-			readDB("results", "status_bit", " ORDER BY PK DESC LIMIT 10",1);
+			readDB("results", 7, "*", " ORDER BY PK DESC LIMIT 10");
 			cout << "Exit?\n";
 			if (getchar() != 'n') {
 				//Cli_Disconnect(Client);
