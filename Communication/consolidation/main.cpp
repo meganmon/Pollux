@@ -1,15 +1,3 @@
-/*
-TO DO:
-station number vs station fk -> current assumption is that station number will also be the foreign/primary key, but set up in place for other also
-
-Major Questions:
-Do I reset the values of the acc bools everytime, or assume that the other side will reset them after they have been read? *****
-
--~~-~-~-~-~-~ CONTINUE -~-~-~-~-~-~-~-~
-rockwell testing
-*/
-
-
 #ifdef OS_WINDOWS
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
@@ -130,7 +118,7 @@ void readDB(string table, int itemCount = 1, string key = "*", string extras = "
 		getchar();
 	}
 	int rows = PQntuples(res);
-	if (rows == 0) {
+	if (rows == 0) {		//if nothing is found in table
 		printf("not exists");
 	}
 	int items = itemCount;
@@ -147,7 +135,7 @@ void readDB(string table, int itemCount = 1, string key = "*", string extras = "
 }
 
 // for converting status and failure bits to dint to upload to database
-double boolsToDInt(vector <bool> bools) {			
+double boolsToDInt(vector <bool> bools) {		//32 bit boolean array to double int		
 	double out = 0;
 	int count = 32;
 	for (int i = 0; i < count; i++) {
@@ -160,7 +148,7 @@ double boolsToDInt(vector <bool> bools) {
 
 //CHECKS IF THE IDENTIFIER IS ALREADY IN GIVEN TABLE
 bool ifExists(string identifier, string column, string table) {
-	//cout << ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str() << "\n";
+	//example: SELECT pk FROM part WHERE Serial='9.9.9.9'
 	res = PQexec(dbconn, ("SELECT * FROM " + table + " WHERE " + column + " = '" + identifier + "'").c_str());
 	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
 		//printf("No data retrieved\n");

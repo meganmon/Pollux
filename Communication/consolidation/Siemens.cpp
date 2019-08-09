@@ -106,6 +106,5 @@ int assignTagOffset(string type) {
 	}	if (type == "bool" || type == "int") {
 		return 2;
 	}
-
 }
 /*end set up for SIEMENS SERVER*/

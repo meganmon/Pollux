@@ -16,10 +16,10 @@
     <ClCompile Include="backup.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="Rockwell.cpp">
+    <ClCompile Include="Siemens.cpp">
       <Filter>Source\Tag Read</Filter>
     </ClCompile>
-    <ClCompile Include="Siemens.cpp">
+    <ClCompile Include="Rockwell.cpp">
       <Filter>Source\Tag Read</Filter>
     </ClCompile>
   </ItemGroup>

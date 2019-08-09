@@ -1,0 +1,18 @@
+Downloaded software:
+Visual Studio 2017
+PostgreSQL 11
+
+
+Visual Studio Extension:
+Npgsql PostgreSQL Integration
+
+Visual Studio Workloads:
+.NET Core cross-platform development 
+Visual Studio extension development
+Data storage and processing
+Desktop development with C++
+
+Libraries:
+rapidxml
+libplctag
+snap7
